@@ -1,3 +1,10 @@
+/**
+ * ファイル名: Code.gs
+ *
+ * 変更履歴:
+ * 2025/05/08 T.Maruyama  新規作成
+ */
+
 function doGet() {
   const template = HtmlService.createTemplateFromFile('index');
   return template.evaluate().setTitle('お弁当注文フォーム');

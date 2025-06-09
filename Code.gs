@@ -3,6 +3,10 @@
  *
  * 変更履歴:
  * 2025/05/08 T.Maruyama  新規作成
+ * 2025/06/10 T.Maruyama  以下の2関数のリファクタリング
+ *                         - function getMenuForWeek()
+ *                         - function saveOrderData()
+ * 2025/06/10 T.Maruyama  Configオブジェクトに開発系のスプレッドシートIDを追加
  */
 
 function doGet() {
@@ -11,8 +15,14 @@ function doGet() {
 }
 
 const CONFIG = {
-  MASTER_ID: '1s00XO8VNkN4NMi1OSbRhquqU-H8gj-Lg_bQbVLKwfP0',
-  ORDER_ID: '1Mzj9Oxz3NWVmvYebdw3Bne9HrJ-v_-0nJo9TZ9xM2pI',
+  // ope
+  // MASTER_ID: '1s00XO8VNkN4NMi1OSbRhquqU-H8gj-Lg_bQbVLKwfP0',
+  //ORDER_ID: '1Mzj9Oxz3NWVmvYebdw3Bne9HrJ-v_-0nJo9TZ9xM2pI',
+
+  // dev
+  MASTER_ID: '10LOh1EtyaavGZWWPRctqFjk0WTRZZwP12llpU2efz-E',
+  ORDER_ID: '1S5tGMNR6RRJfPEDp_eiIafAGtwhQlZZheMPaazrFjI4',
+
   ORDER_SHEET: 'D_Order'
 };
 

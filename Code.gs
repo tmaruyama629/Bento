@@ -7,6 +7,9 @@
  *                         - function getMenuForWeek()
  *                         - function saveOrderData()
  * 2025/06/10 T.Maruyama  Configオブジェクトに開発系のスプレッドシートIDを追加
+ * 2025/06/19 T.Maruyama  LockServiceを使用して、注文保存処理の同時実行を制御
+ *                         - function saveOrderData()
+ *                         - function generateOrderNo()  
  */
 
 function doGet() {
@@ -296,62 +299,70 @@ function formatDate(value) {
 
 // 注文保存処理
 function saveOrderData(employeeCD, orders, isAdmin) {
-  const holidayMap = getHolidayMap();
-  const dbSheet = SpreadsheetApp.openById(CONFIG.ORDER_ID).getSheetByName(CONFIG.ORDER_SHEET);
-  const now = new Date();
-  const insertedOrders = [];
-  const data = dbSheet.getDataRange().getValues();
-  const header = data[0];
+  // ロック取得（30秒待機）
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30); // 30秒
 
-  // マスタデータ取得
-  const master = getMasterData();
+  try {
+    const holidayMap = getHolidayMap();
+    const dbSheet = SpreadsheetApp.openById(CONFIG.ORDER_ID).getSheetByName(CONFIG.ORDER_SHEET);
+    const now = new Date();
+    const insertedOrders = [];
+    const data = dbSheet.getDataRange().getValues();
+    const header = data[0];
 
-  orders.forEach(order => {
-    const nowDateStr = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy/MM/dd');
-    if (!isAdmin && order.OrderDate < nowDateStr) return;
+    // マスタデータ取得
+    const master = getMasterData();
 
-    const orderDate = parseOrderDate(order.OrderDate);
-    const orderDateStr = Utilities.formatDate(orderDate, Session.getScriptTimeZone(), 'yyyy/MM/dd');
+    orders.forEach(order => {
+      const nowDateStr = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy/MM/dd');
+      if (!isAdmin && order.OrderDate < nowDateStr) return;
 
-    // 締切・休日判定
-    if (isOrderClosed(orderDate, now, nowDateStr, orderDateStr, holidayMap, isAdmin, master.deadlineHour, master.deadlineMinute)) return;
+      const orderDate = parseOrderDate(order.OrderDate);
+      const orderDateStr = Utilities.formatDate(orderDate, Session.getScriptTimeZone(), 'yyyy/MM/dd');
 
-    // 既存注文検索
-    const existingRow = findExistingOrderRow(data, header, employeeCD, orderDateStr);
+      // 締切・休日判定
+      if (isOrderClosed(orderDate, now, nowDateStr, orderDateStr, holidayMap, isAdmin, master.deadlineHour, master.deadlineMinute)) return;
 
-    // 工場のみ変更判定
-    if (!order.MenuCD || !order.VenderCD) {
-      if (!isFactoryOnlyChange(order, existingRow)) return;
-    }
+      // 既存注文検索
+      const existingRow = findExistingOrderRow(data, header, employeeCD, orderDateStr);
 
-    // 既存注文があればActiveFlgを0に
-    if (existingRow > 0) {
-      dbSheet.getRange(existingRow + 1, master.activeFlgIdx + 1).setValue(0);
-      if ((!order.MenuCD || !order.VenderCD)) {
-        const oldRow = data[existingRow];
-        order.MenuCD = oldRow[master.menuCDIdx] || '';
-        order.VenderCD = oldRow[master.venderCDIdx] || '';
+      // 工場のみ変更判定
+      if (!order.MenuCD || !order.VenderCD) {
+        if (!isFactoryOnlyChange(order, existingRow)) return;
       }
-    }
 
-    // 注文行作成
-    const newRow = createOrderRow(order, orderDate, employeeCD, now, master);
+      // 既存注文があればActiveFlgを0に
+      if (existingRow > 0) {
+        dbSheet.getRange(existingRow + 1, master.activeFlgIdx + 1).setValue(0);
+        if ((!order.MenuCD || !order.VenderCD)) {
+          const oldRow = data[existingRow];
+          order.MenuCD = oldRow[master.menuCDIdx] || '';
+          order.VenderCD = oldRow[master.venderCDIdx] || '';
+        }
+      }
 
-    const lastRow = dbSheet.getLastRow() + 1;
-    dbSheet.getRange(lastRow, 1, 1, 8).setValues([newRow]);
+      // 注文行作成
+      const newRow = createOrderRow(order, orderDate, employeeCD, now, master);
 
-    insertedOrders.push({
-      OrderDate: orderDateStr,
-      MenuCD: order.MenuCD,
-      VenderCD: order.VenderCD,
-      MenuName: master.menuMap.get(`${order.MenuCD}|${order.VenderCD}`) || '不明なメニュー',
-      FactoryCD: order.FactoryCD ?? '',
-      VenderName: master.venderMap.get(order.VenderCD) || '不明なベンダー'
+      const lastRow = dbSheet.getLastRow() + 1;
+      dbSheet.getRange(lastRow, 1, 1, 8).setValues([newRow]);
+
+      insertedOrders.push({
+        OrderDate: orderDateStr,
+        MenuCD: order.MenuCD,
+        VenderCD: order.VenderCD,
+        MenuName: master.menuMap.get(`${order.MenuCD}|${order.VenderCD}`) || '不明なメニュー',
+        FactoryCD: order.FactoryCD ?? '',
+        VenderName: master.venderMap.get(order.VenderCD) || '不明なベンダー'
+      });
     });
-  });
 
-  Logger.log('insertedOrders: ' + JSON.stringify(insertedOrders));
-  return insertedOrders;
+    Logger.log('insertedOrders: ' + JSON.stringify(insertedOrders));
+    return insertedOrders;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // マスタデータ取得
@@ -476,20 +487,25 @@ function parseOrderDate(value) {
 
 // オーダ番号発番
 function generateOrderNo() {
-  const sheet = SpreadsheetApp.openById(CONFIG.ORDER_ID).getSheetByName(CONFIG.ORDER_SHEET);
-  const lastRow = sheet.getLastRow();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30); // 30秒
+  try {
+    const sheet = SpreadsheetApp.openById(CONFIG.ORDER_ID).getSheetByName(CONFIG.ORDER_SHEET);
+    const lastRow = sheet.getLastRow();
 
-  let nextNumber = 1;
-  if (lastRow > 1) {
-    const data = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
-    const numbers = data
-      .filter(orderNo => orderNo)
-      .map(orderNo => Number(orderNo))
-      .filter(n => !isNaN(n));
-    if (numbers.length > 0) {
-      nextNumber = Math.max(...numbers) + 1;
+    let nextNumber = 1;
+    if (lastRow > 1) {
+      const data = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+      const numbers = data
+        .filter(orderNo => orderNo)
+        .map(orderNo => Number(orderNo))
+        .filter(n => !isNaN(n));
+      if (numbers.length > 0) {
+        nextNumber = Math.max(...numbers) + 1;
+      }
     }
+    return String(nextNumber).padStart(5, '0');
+  } finally {
+    lock.releaseLock();
   }
-
-  return String(nextNumber).padStart(5, '0');
 }

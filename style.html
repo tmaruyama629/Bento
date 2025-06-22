@@ -6,13 +6,41 @@
     padding: 20px;
   }
 
-  #form-container,
-  #login-container {
+  #form-container {
     width: 100%;
     padding: 0 20px;
   }
 
-  /* パスワード入力フィールドのスタイル */
+  /* === ログイン画面のレイアウト === */
+  #login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background-color: #f4f7f6;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+
+  .login-form {
+    background: #fff;
+    padding: 2rem 2.5rem;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    width: 100%;
+    max-width: 400px;
+  }
+
+  .login-form h1 {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    font-size: 24px;
+    color: #333;
+    font-weight: 600;
+  }
+
+  /* 社員CD・パスワード入力フィールドのスタイル */
+  #employeeCD,
   #password {
     width: 50%;
     padding: 10px;
@@ -25,7 +53,38 @@
     transition: border-color 0.3s ease, background-color 0.3s ease;
   }
 
+  .login-form #employeeCD {
+    width: 100%;
+  }
+
+  .login-form button {
+    width: 100%;
+    margin-top: 0.5rem;
+    padding: 12px;
+    font-size: 16px;
+  }
+
+  .password-wrapper {
+    position: relative; /* アイコンを絶対配置するための基準 */
+  }
+
+  .login-form #password {
+    width: 100%;
+    padding-right: 40px; /* アイコンとテキストが重ならないように右にパディングを追加 */
+  }
+
+  .toggle-password-icon {
+    position: absolute;
+    top: 50%;
+    right: 12px; /* 右からの位置 */
+    transform: translateY(-50%); /* 上下中央に配置 */
+    cursor: pointer;
+    user-select: none; /* ユーザーがアイコンを選択できないようにする */
+    color: #777;
+  }
+
   /* フォーカス時のスタイル */
+  #employeeCD:focus,
   #password:focus {
     border-color: #26abb7; /* フォーカス時にボーダーの色を変更 */
     background-color: #f4f9f9; /* 背景色を少し明るく */
@@ -33,6 +92,7 @@
   }
 
   /* プレースホルダーテキストのスタイル */
+  #employeeCD::placeholder,
   #password::placeholder {
     color: #999;
   }
@@ -44,7 +104,7 @@
   }
 
   #page-header {
-    width: 90%;
+    width: 100%; /* フォームコンテナ内では幅を100%に */
     padding: 20px 0;
     text-align: center;
     border-bottom: 2px solid #399098;
@@ -69,8 +129,16 @@
     color: #3c763d;
   }
 
+  /* ログイン画面の入力グループ */
   .form-group {
-    margin-bottom: 15px;
+    margin-bottom: 1.25rem;
+    text-align: left;
+  }
+
+  .form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
   }
 
   .bulk-set-container {

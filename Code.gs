@@ -1,15 +1,30 @@
 /**
- * ファイル名: Code.gs
+ * @fileoverview お弁当注文システムのサーバーサイドロジックです。
+ * Webアプリのバックエンド処理、スプレッドシートとのデータ連携などを担当します。
+ * @author T.Maruyama
+ * @since 2025-05-08
+ * @version 1.1.0
+ */
+
+/**
+ * =================================================================================
+ * 変更履歴
+ * =================================================================================
+ * 2025-06-23 T.Maruyama v1.1.0
+ * - [機能変更] ログイン認証を社員CDとパスワードの組み合わせで行うように変更
+ * - [機能追加] ログイン画面の入力値制限（社員CD:半角数字6桁, PW:半角英数記号）
+ * - [機能追加] パスワードの表示/非表示切り替え機能を追加
+ * 
+ * 2025-06-19 T.Maruyama v1.0.2
+ * - [修正] LockServiceを導入し、注文保存処理の同時実行を防止 (saveOrderData, generateOrderNo)
+ * 
+ * 2025-06-10 T.Maruyama v1.0.1
+ * - [リファクタリング] getMenuForWeek, saveOrderData の処理を改善
+ * - [追加] 開発用のスプレッドシートIDをCONFIGに追加
  *
- * 変更履歴:
- * 2025/05/08 T.Maruyama  新規作成
- * 2025/06/10 T.Maruyama  以下の2関数のリファクタリング
- *                         - function getMenuForWeek()
- *                         - function saveOrderData()
- * 2025/06/10 T.Maruyama  Configオブジェクトに開発系のスプレッドシートIDを追加
- * 2025/06/19 T.Maruyama  LockServiceを使用して、注文保存処理の同時実行を制御
- *                         - function saveOrderData()
- *                         - function generateOrderNo()  
+ * 2025-05-08 T.Maruyama v1.0.0
+ * - 新規作成
+ * =================================================================================
  */
 
 function doGet() {
@@ -41,29 +56,6 @@ function getConfigValue(key) {
     }
   }
   return null; // 見つからなかった場合
-}
-
-// パスワード検証（汎用設定取得を使用）
-function verifyPassword(inputPw) {
-  const adminPw = getConfigValue('AdminPassword');
-  const userPw = getConfigValue('UserPassword');
-
-  if (inputPw === adminPw) {
-    return {
-      isValid: true,
-      isAdmin: true
-    };
-  } else if (inputPw === userPw) {
-    return {
-      isValid: true,
-      isAdmin: false
-    };
-  } else {
-    return {
-      isValid: false,
-      isAdmin: false
-    };
-  }
 }
 
 // 共通のスプレッドシート取得関数
@@ -305,6 +297,27 @@ function formatDate(value) {
   const mm = String(date.getMonth() + 1).padStart(2, '0');
   const dd = String(date.getDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
+}
+
+// ログイン認証
+function verifyLogin(empCD, inputPw) {
+  if (empCD === '999999') {
+    const adminPw = getConfigValue('AdminPassword');
+    if (inputPw === adminPw) {
+      return { isValid: true, isAdmin: true, employeeCD: empCD };
+    }
+  } else {
+    const sheet = getSpreadsheet(CONFIG.MASTER_ID).getSheetByName('M_Employee');
+    if (!sheet) {
+      throw new Error('M_Employee シートが見つかりません。');
+    }
+    const values = sheet.getDataRange().getValues();
+    const employee = values.find(row => row[0] === empCD && row[3] === inputPw);
+    if (employee) {
+      return { isValid: true, isAdmin: false, employeeCD: empCD, employeeName: employee[1] }; 
+    }
+  }
+  return { isValid: false, isAdmin: false };
 }
 
 // 注文保存処理

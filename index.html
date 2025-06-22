@@ -15,12 +15,13 @@
     <header id="page-header">
       <h1>パスワード入力</h1>
     </header>
-
+    <!-- 社員CD入力欄の追加 -->
+    <input type="text" id="employeeCD" placeholder="社員CDを入力してください" />
     <input type="password" id="password" placeholder="パスワードを入力してください" />
 
     <button onclick="checkPassword()">ログイン</button>
 
-    <div id="error-message" class="error-message">パスワードが違います。</div>
+    <div id="error-message" class="error-message">認証情報が誤っています。</div>
   </div>
 
   <!-- フォーム画面 -->
@@ -75,24 +76,36 @@
 
     // パスワード認証を確認する関数
     function checkPassword() {
+      const emp = document.getElementById('employeeCD').value;
       const pw = document.getElementById('password').value;
       google.script.run.withSuccessHandler(function(result) {
         if (result.isValid) {
-          isAdmin = result.isAdmin; // 管理者かどうかの情報を保持
+          isAdmin = result.isAdmin;
           document.getElementById("error-message").style.display = "none";
           document.getElementById("login-container").style.display = "none";
           document.getElementById("form-container").style.display = "block";
-          
-          // 管理者の場合はヘッダーを変更
+          if (!result.isAdmin) {
+            // ログイン時に入力された社員CDのみを表示し、プルダウンを非活性化
+            // 社員名も表示するように変更
+            const employeeSelect = document.getElementById("employeeSelect");
+            employeeSelect.innerHTML = "";
+            const option = document.createElement("option");
+            option.value = result.employeeCD;
+            option.textContent = `${result.employeeCD}_${result.employeeName}`; // 社員名を追加
+            option.selected = true;
+            employeeSelect.appendChild(option);
+            employeeSelect.disabled = true;
+          }
           if (isAdmin) {
             document.getElementById("form-title").textContent = "お弁当注文フォーム(管理者)";
           } else {
             document.getElementById("form-title").textContent = "お弁当注文フォーム";
           }
+          drawCalendar(result.employeeCD); // 通常ログイン時もカレンダーを自動表示
         } else {
           document.getElementById("error-message").style.display = "block";
         }
-      }).verifyPassword(pw);
+      }).verifyLogin(emp, pw);
     }
 
     function showLoading() {

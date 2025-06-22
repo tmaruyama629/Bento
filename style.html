@@ -1,0 +1,364 @@
+<style>
+  /* === 共通レイアウト設定 === */
+  body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+  }
+
+  #form-container,
+  #login-container {
+    width: 100%;
+    padding: 0 20px;
+  }
+
+  /* パスワード入力フィールドのスタイル */
+  #password {
+    width: 50%;
+    padding: 10px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #fff;
+    color: #333;
+    box-sizing: border-box; /* パディングが幅に影響しないようにする */
+    transition: border-color 0.3s ease, background-color 0.3s ease;
+  }
+
+  /* フォーカス時のスタイル */
+  #password:focus {
+    border-color: #26abb7; /* フォーカス時にボーダーの色を変更 */
+    background-color: #f4f9f9; /* 背景色を少し明るく */
+    outline: none; /* ブラウザデフォルトの青枠を消す */
+  }
+
+  /* プレースホルダーテキストのスタイル */
+  #password::placeholder {
+    color: #999;
+  }
+
+  .error-message {
+    color: red;
+    margin-top: 10px;
+    display: none; /* ← 初期状態では非表示 */
+  }
+
+  #page-header {
+    width: 90%;
+    padding: 20px 0;
+    text-align: center;
+    border-bottom: 2px solid #399098;
+    margin-bottom: 20px;
+  }
+
+  #page-header h1 {
+    margin: 0;
+    font-size: 28px;
+    color: #399098;
+    text-align: left;
+  }
+
+  #comment-area {
+    width: 90%;
+    border: 2px solid #d6e9c6;
+    background-color: #dff0d8;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 8px;
+    font-size: 16px;
+    color: #3c763d;
+  }
+
+  .form-group {
+    margin-bottom: 15px;
+  }
+
+  .bulk-set-container {
+    max-width: 90%;
+    padding: 10px;
+    margin-bottom: 15px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    background: #f9f9f9;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .bulk-set-container label {
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9rem;
+    height: 40px;
+  }
+
+  #bulkMenuSelect {
+    width: 400px;
+    height: 40px;
+  }
+
+  #bulkFactorySelect {
+    width: 180px;
+    height: 40px;
+  }
+
+  /* 修正されたボタンスタイル */
+  .bulk-set-container button {
+    margin-top: 0;
+    align-self: stretch; /* 他の要素と同じ高さに揃える */
+    height: 40px; /* ボタンの高さを他の要素と揃える */
+    padding: 0 20px; /* ボタン内側の余白を調整 */
+    font-size: 16px;
+    line-height: 40px; /* ボタン内のテキストを縦方向に中央揃え */
+    display: flex; /* フレックスボックスを適用してテキスト中央揃え */
+    justify-content: center; /* 横方向の中央揃え */
+    border-radius: 4px; /* ボタンの角を丸める */
+  }
+
+  .bulk-set-container button span {
+    vertical-align: middle; /* テキストを縦方向に中央揃え */
+  }
+
+  label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+  }
+
+  select,
+  input[type="password"] {
+    width: 50%;
+    padding: 10px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+
+  #employeeSelect {
+    margin: 0 auto 15px auto;
+    margin-bottom: 15px;
+  }
+
+  button {
+    display: block;
+    padding: 10px;
+    margin-left: 0;
+    margin-top: 20px;
+    font-size: 18px;
+    background-color: #26abb7;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+  }
+
+  button:active {
+    background-color: #399098;
+    transform: scale(0.98);
+  }
+
+  .week-container {
+    margin-bottom: 30px;
+  }
+
+  .week-title {
+    font-weight: bold;
+    font-size: 18px;
+    margin-bottom: 10px;
+  }
+
+  table {
+    width: 95%;
+    border-collapse: collapse;
+    background-color: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+  }
+
+  th, td {
+    padding: 12px 10px;
+    font-size: 13px;
+    border-bottom: 1px solid #e0e0e0;
+    border-right: 1px solid #e0e0e0;
+  }
+
+  td:last-child,
+  th:last-child {
+    border-right: none;
+  }
+
+  th {
+    background-color: #f4f9f9;
+    color: #399098;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #399098;
+  }
+
+  th:nth-child(1), td:nth-child(1) {
+    width: 10%;
+  }
+
+  th:nth-child(2), td:nth-child(2) {
+    width: 35%;
+  }
+
+  th:nth-child(3), td:nth-child(3) {
+    width: 10%;
+  }
+
+  th:nth-child(4), td:nth-child(4) {
+    width: 35%;
+  }
+
+  th:nth-child(5), td:nth-child(5) {
+    width: 10%;
+  }
+
+  td select {
+    width: 100%;
+    font-size: 13px;
+  }
+
+  tr:hover {
+    background-color: #f0f8ff;
+    transition: background-color 0.2s ease;
+  }
+
+  .disabled-cell {
+    color: #aaa;
+    background-color: #f5f5f5;
+  }
+
+  .today-cell {
+    background-color: #fffcc9;
+    font-weight: bold;
+  }
+
+  .footer {
+    margin-top: 20px;
+    text-align: center;
+  }
+
+  .spinner {
+    margin: 0 auto 10px;
+    border: 8px solid #f3f3f3;
+    border-top: 8px solid #3498db;
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  /* === スマホ対応 === */
+  @media (max-width: 1200px) {
+    table {
+      display: none;
+    }
+
+    .bulk-set-container {
+      flex-direction: column;
+      max-width: 90%;
+    }
+
+  .bulk-set-item {
+    width: 100%;
+  }
+
+    #bulkMenuSelect,
+    #bulkFactorySelect,
+    .bulk-set-container button {
+      width: 100%;
+    }
+
+    .mobile-entry {
+      background: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 12px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      font-size: 16px;
+      width: 90%;
+    }
+
+    .mobile-entry .date,
+    .mobile-entry .before,
+    .mobile-entry .after,
+    .mobile-entry .factory {
+      margin-bottom: 8px;
+    }
+
+    .mobile-entry .date {
+      font-weight: bold;
+      font-size: 20px;
+      line-height: 1.6;
+      min-height: 1.8em;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      background-color: #e8f4f6;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-weight: bold;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    .mobile-entry .today {
+      color: red;
+      margin-left: 5px;
+      font-size: 16px;
+    }
+
+    .mobile-entry .row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .mobile-entry .label {
+      flex-shrink: 0;
+      width: 16em;
+      margin-right: 10px;
+      white-space: nowrap;
+      font-size: 16px;
+    }
+
+    .mobile-entry .value {
+      flex-grow: 1;
+      font-size: 16px;
+    }
+
+    .mobile-entry select {
+      width: 100%;
+      padding: 6px;
+      font-size: 16px;
+      height: 40px;
+    }
+
+    .mobile-entry .disabled-cell {
+      color: #aaa;
+      background-color: #f9f9f9;
+    }
+
+    .mobile-entry .today-cell {
+      background-color: #ffffcc;
+      font-weight: bold;
+    }
+
+    .mobile-entry select:focus {
+      outline: 2px solid #007BFF;
+      background-color: #eef6ff;
+      box-shadow: 0 0 3px #007BFF;
+    }
+  }
+</style>

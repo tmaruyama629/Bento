@@ -76,8 +76,12 @@ function getSpreadsheet(sheetId) {
 }
 
 // データ取得共通化
+// 修正: 指定シートが見つからない場合にエラーをスローする処理を追加
 function getDataFromSheet(sheetId, sheetName) {
   const sheet = getSpreadsheet(sheetId).getSheetByName(sheetName);
+  if (!sheet) {
+    throw new Error(`シート ${sheetName} が見つかりません。`);
+  }
   const values = sheet.getDataRange().getValues();
   return values.slice(1); // ヘッダー除外
 }
@@ -291,6 +295,12 @@ function formatDate(value) {
   }
 
   const date = new Date(value);
+  if (isNaN(date.getTime())) { // Invalid Date かどうかをチェック
+    Logger.log(`formatDate に無効な日付値が渡されました: ${value}`);
+    // 動作を決定: エラーをスローするか、null を返すか、デフォルトのエラー文字列を返す
+    throw new Error(`無効な日付形式です: ${value}`);
+    // return null;
+  }
   const yyyy = date.getFullYear();
   const mm = String(date.getMonth() + 1).padStart(2, '0');
   const dd = String(date.getDate()).padStart(2, '0');
@@ -315,47 +325,51 @@ function saveOrderData(employeeCD, orders, isAdmin) {
     const master = getMasterData();
 
     orders.forEach(order => {
-      const nowDateStr = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy/MM/dd');
-      if (!isAdmin && order.OrderDate < nowDateStr) return;
+      try { // 追加: 各注文処理毎のエラーハンドリング
+        const nowDateStr = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy/MM/dd');
+        if (!isAdmin && order.OrderDate < nowDateStr) return;
 
-      const orderDate = parseOrderDate(order.OrderDate);
-      const orderDateStr = Utilities.formatDate(orderDate, Session.getScriptTimeZone(), 'yyyy/MM/dd');
+        const orderDate = parseOrderDate(order.OrderDate);
+        const orderDateStr = Utilities.formatDate(orderDate, Session.getScriptTimeZone(), 'yyyy/MM/dd');
 
-      // 締切・休日判定
-      if (isOrderClosed(orderDate, now, nowDateStr, orderDateStr, holidayMap, isAdmin, master.deadlineHour, master.deadlineMinute)) return;
+        // 締切・休日判定
+        if (isOrderClosed(orderDate, now, nowDateStr, orderDateStr, holidayMap, isAdmin, master.deadlineHour, master.deadlineMinute)) return;
 
-      // 既存注文検索
-      const existingRow = findExistingOrderRow(data, header, employeeCD, orderDateStr);
+        // 既存注文検索
+        const existingRow = findExistingOrderRow(data, header, employeeCD, orderDateStr);
 
-      // 工場のみ変更判定
-      if (!order.MenuCD || !order.VenderCD) {
-        if (!isFactoryOnlyChange(order, existingRow)) return;
-      }
-
-      // 既存注文があればActiveFlgを0に
-      if (existingRow > 0) {
-        dbSheet.getRange(existingRow + 1, master.activeFlgIdx + 1).setValue(0);
-        if ((!order.MenuCD || !order.VenderCD)) {
-          const oldRow = data[existingRow];
-          order.MenuCD = oldRow[master.menuCDIdx] || '';
-          order.VenderCD = oldRow[master.venderCDIdx] || '';
+        // 工場のみ変更判定
+        if (!order.MenuCD || !order.VenderCD) {
+          if (!isFactoryOnlyChange(order, existingRow)) return;
         }
+
+        // 既存注文があればActiveFlgを0に
+        if (existingRow > 0) {
+          dbSheet.getRange(existingRow + 1, master.activeFlgIdx + 1).setValue(0);
+          if ((!order.MenuCD || !order.VenderCD)) {
+            const oldRow = data[existingRow];
+            order.MenuCD = oldRow[master.menuCDIdx] || '';
+            order.VenderCD = oldRow[master.venderCDIdx] || '';
+          }
+        }
+
+        // 注文行作成
+        const newRow = createOrderRow(order, orderDate, employeeCD, now, master);
+
+        const lastRow = dbSheet.getLastRow() + 1;
+        dbSheet.getRange(lastRow, 1, 1, 8).setValues([newRow]);
+
+        insertedOrders.push({
+          OrderDate: orderDateStr,
+          MenuCD: order.MenuCD,
+          VenderCD: order.VenderCD,
+          MenuName: master.menuMap.get(`${order.MenuCD}|${order.VenderCD}`) || '不明なメニュー',
+          FactoryCD: order.FactoryCD ?? '',
+          VenderName: master.venderMap.get(order.VenderCD) || '不明なベンダー'
+        });
+      } catch (error) {
+        Logger.log(`注文処理でエラーが発生しました (Employee: ${employeeCD}, OrderDate: ${order.OrderDate}): ${error.message}`);
       }
-
-      // 注文行作成
-      const newRow = createOrderRow(order, orderDate, employeeCD, now, master);
-
-      const lastRow = dbSheet.getLastRow() + 1;
-      dbSheet.getRange(lastRow, 1, 1, 8).setValues([newRow]);
-
-      insertedOrders.push({
-        OrderDate: orderDateStr,
-        MenuCD: order.MenuCD,
-        VenderCD: order.VenderCD,
-        MenuName: master.menuMap.get(`${order.MenuCD}|${order.VenderCD}`) || '不明なメニュー',
-        FactoryCD: order.FactoryCD ?? '',
-        VenderName: master.venderMap.get(order.VenderCD) || '不明なベンダー'
-      });
     });
 
     Logger.log('insertedOrders: ' + JSON.stringify(insertedOrders));
@@ -366,8 +380,12 @@ function saveOrderData(employeeCD, orders, isAdmin) {
 }
 
 // マスタデータ取得
+// 修正: 各マスタシートが取得できなかった場合にエラーをスローするチェックを追加
 function getMasterData() {
   const menuMasterSheet = SpreadsheetApp.openById(CONFIG.MASTER_ID).getSheetByName('M_Menu');
+  if (!menuMasterSheet) {
+    throw new Error('M_Menu シートが見つかりません。');
+  }
   const menuData = menuMasterSheet.getDataRange().getValues();
   const menuHeader = menuData[0];
   const menuCDIdxInMaster = menuHeader.indexOf('MenuCD');
@@ -375,12 +393,18 @@ function getMasterData() {
   const menuNameIdx = menuHeader.indexOf('MenuName');
 
   const venderSheet = SpreadsheetApp.openById(CONFIG.MASTER_ID).getSheetByName('M_Vender');
+  if (!venderSheet) {
+    throw new Error('M_Vender シートが見つかりません。');
+  }
   const venderData = venderSheet.getDataRange().getValues();
   const venderHeader = venderData[0];
   const venderCDIdxInVender = venderHeader.indexOf('VenderCD');
   const venderNameIdx = venderHeader.indexOf('VenderName');
 
   const configSheet = SpreadsheetApp.openById(CONFIG.MASTER_ID).getSheetByName('M_Config');
+  if (!configSheet) {
+    throw new Error('M_Config シートが見つかりません。');
+  }
   const configData = configSheet.getDataRange().getValues();
   const configMap = {};
   for (let i = 1; i < configData.length; i++) {
@@ -405,6 +429,9 @@ function getMasterData() {
 
   // dbSheet header index
   const dbSheet = SpreadsheetApp.openById(CONFIG.ORDER_ID).getSheetByName(CONFIG.ORDER_SHEET);
+  if (!dbSheet) {
+    throw new Error(`注文シート ${CONFIG.ORDER_SHEET} が見つかりません。`);
+  }
   const dbHeader = dbSheet.getDataRange().getValues()[0];
   return {
     menuMap,

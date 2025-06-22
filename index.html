@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <base target="_top">
+  <?!= HtmlService.createHtmlOutputFromFile('style').getContent(); ?>  
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>お弁当注文フォーム</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment-with-locales.min.js"></script>
+</head>
+<body>
+  <!-- パスワード認証画面 -->
+  <div id="login-container">
+    <header id="page-header">
+      <h1>パスワード入力</h1>
+    </header>
+
+    <input type="password" id="password" placeholder="パスワードを入力してください" />
+
+    <button onclick="checkPassword()">ログイン</button>
+
+    <div id="error-message" class="error-message">パスワードが違います。</div>
+  </div>
+
+  <!-- フォーム画面 -->
+  <div id="form-container" style="display: none;">
+    <header id="page-header">
+      <h1 id="form-title">お弁当注文フォーム</h1>
+    </header>
+
+    <div id="comment-area" style="margin-top: 20px;"></div>
+
+    <label>社員:</label>
+    <select id="employeeSelect">
+      <option value="">社員を選択してください</option>
+    </select>
+
+    <br>
+
+    <div class="bulk-set-container">
+      <div class="bulk-set-item">
+        <span class="bulk-label">一括設定メニュー:</span>
+        <select id="bulkMenuSelect">
+          <option value="">選択してください</option>
+        </select>
+      </div>
+      <div class="bulk-set-item">
+        <span class="bulk-label">一括設定工場:</span>
+        <select id="bulkFactorySelect">
+          <option value="">選択してください</option>
+        </select>
+      </div>
+      <button id="applyBulkChange">一括設定</button>
+    </div>
+
+    <div id="calendarContainer"></div>
+
+    <br>
+
+    <button id="submitOrder">注文を送信</button>
+  </div>
+  <div id="loadingOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.7); z-index:9999; text-align:center; padding-top:20%;">
+    <div class="spinner"></div>
+    <div>処理中です…</div>
+  </div>
+  <script>
+
+    window.addEventListener('DOMContentLoaded', function() {
+      document.getElementById('password').focus();
+    });
+
+    // パスワード認証を確認する関数
+    let isAdmin = false; // 初期値は false、必要に応じて GAS 側から取得して上書き
+
+    // パスワード認証を確認する関数
+    function checkPassword() {
+      const pw = document.getElementById('password').value;
+      google.script.run.withSuccessHandler(function(result) {
+        if (result.isValid) {
+          isAdmin = result.isAdmin; // 管理者かどうかの情報を保持
+          document.getElementById("error-message").style.display = "none";
+          document.getElementById("login-container").style.display = "none";
+          document.getElementById("form-container").style.display = "block";
+          
+          // 管理者の場合はヘッダーを変更
+          if (isAdmin) {
+            document.getElementById("form-title").textContent = "お弁当注文フォーム(管理者)";
+          } else {
+            document.getElementById("form-title").textContent = "お弁当注文フォーム";
+          }
+        } else {
+          document.getElementById("error-message").style.display = "block";
+        }
+      }).verifyPassword(pw);
+    }
+
+    function showLoading() {
+      $('#loadingOverlay').show();
+    }
+
+    function hideLoading() {
+      $('#loadingOverlay').hide();
+    }
+
+    function displayComments() {
+      google.script.run.withSuccessHandler(function (comments) {
+        const container = document.getElementById("comment-area");
+        container.innerHTML = "";
+
+        // お知らせ見出しを追加
+        const heading = document.createElement("h3");
+        heading.textContent = "-お知らせ-";
+        heading.style.marginBottom = "10px";
+        heading.style.fontSize = "20px";
+        heading.style.color = "#333";
+        container.appendChild(heading);
+
+        // 各コメントを表示
+        comments.forEach(comment => {
+          const block = document.createElement("div");
+          block.className = "comment-block";
+
+          const para = document.createElement("p");
+
+          if (comment.HyperLink) {
+            const link = document.createElement("a");
+            link.href = comment.HyperLink;
+            link.textContent = comment.CommentText;
+            link.target = "_blank";
+            link.style.color = "#007bff";
+            link.style.textDecoration = "underline";
+            para.appendChild(link);
+          } else {
+            para.textContent = comment.CommentText;
+          }
+
+          block.appendChild(para);
+          container.appendChild(block);
+        });
+      }).getComment();
+    }
+
+    window.onload = function () {
+      displayComments();
+    };
+
+    let factoryList = [];
+    let defaultFactoryCD = '';
+    const currentWeekStart = moment().startOf('week').add(1, 'days');
+    
+    $(function () {
+      moment.locale('ja');
+  
+      google.script.run.withSuccessHandler(empList => {
+        empList.forEach(emp => {
+          $('#employeeSelect').append(new Option(
+            `${emp.EmployeeCD}_${emp.EmployeeName}`,
+            emp.EmployeeCD
+          ));
+        });
+      }).getEmployeeList();
+  
+      google.script.run.withSuccessHandler(facList => {
+        factoryList = facList;
+      }).getFactoryList();
+  
+      $('#employeeSelect').change(function () {
+        const emp = $(this).val();
+        if (!emp) {
+          $('#calendarContainer').empty();
+          return;
+        }
+  
+        google.script.run.withSuccessHandler(res => {
+          defaultFactoryCD = res.defaultFactory;
+          drawCalendar(emp);
+        }).getEmployeeData(emp);
+      });
+
+      function drawCalendar(emp) {
+        showLoading(); // ★ 処理中表示開始
+
+        $('#calendarContainer').empty();
+        const isMobile = window.matchMedia("(max-width: 1200px)").matches;
+
+        // 週情報をまとめて配列に格納してソート
+        const weekList = [];
+        for (let w = 0; w < 3; w++) {
+          const start = moment(currentWeekStart).add(w, 'weeks');
+          const end = moment(start).add(6, 'days');
+          weekList.push({
+            start,
+            end,
+            startStr: start.format('YYYY-MM-DD'),
+            endStr: end.format('YYYY-MM-DD')
+          });
+        }
+
+        weekList.sort((a, b) => a.start - b.start);
+
+        let loadedCount = 0; // ★ 完了数をカウント
+        const totalWeeks = weekList.length;        
+
+        weekList.forEach(({ start, end, startStr, endStr }) => {
+          const weekDiv = $('<div class="week-container"></div>');
+
+          let table;
+          if (!isMobile) {
+            weekDiv.append(`<h2 class="week-title">${startStr} ～ ${endStr}</h2>`);
+
+            table = $(`
+              <table>
+                <thead>
+                  <tr>
+                    <th>日付</th>
+                    <th>登録済メニュー</th>
+                    <th>登録済工場</th>
+                    <th>変更後メニュー</th>
+                    <th>変更後工場</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            `);
+            weekDiv.append(table);
+          }
+
+          $('#calendarContainer').append(weekDiv); // PC/モバイル共通で週単位divを追加
+
+          google.script.run.withSuccessHandler(data => {
+            populateBulkSelectors(data.flatMap(d => d.Menus), factoryList);
+            if (!isMobile) {
+              const tbody = table.find('tbody');
+              data.forEach(day => {
+                const tr = $('<tr>').attr('data-factorycd', day.FactoryCD || '');
+                const dateMoment = moment(day.Date);
+                const isToday = dateMoment.isSame(moment(), 'day');
+                const isPast = dateMoment.isBefore(moment(), 'day');
+                const dateJP = dateMoment.format('MM月DD日（ddd）');
+
+                const dateCell = $(`<td>${dateJP}</td>`);
+                if (isToday) dateCell.addClass('today-cell');
+                tr.append(dateCell);
+
+                const before = day.Ordered ? `${day.MenuCD}_${day.MenuName}[${day.VenderName}]` : '-';
+                tr.append(`<td>${before}</td>`);
+
+                const factoryName = factoryList.find(f => f.FactoryCD === (day.FactoryCD || ''))?.FactoryName || '-';
+                tr.append(`<td>${factoryName}</td>`); // 登録済工場表示
+
+                const tdNew = $('<td></td>');
+                const tdFactory = $('<td></td>');
+
+                if ((day.IsClosed && !isAdmin) || !day.Menus.length || isPast) {
+                  const sel = $('<select disabled><option>変更不可</option></select>').attr('data-date', day.Date);
+                  const selFactory = $('<select class="factory-select" disabled><option>変更不可</option></select>').attr('data-date', day.Date);
+                  tdNew.append(sel);
+                  tdFactory.append(selFactory);
+                } else {
+                  const sel = $('<select></select>').attr('data-date', day.Date);
+                  sel.append('<option value="NOCHANGE">変更なし</option>');
+                  day.Menus.forEach(m => {
+                    sel.append(`<option value="${m.MenuCD}_${m.VenderCD}">${m.MenuCD}_${m.MenuName}[${m.VenderName}]</option>`);
+                  });
+                  tdNew.append(sel);
+
+                  const selFactory = $('<select class="factory-select"></select>').attr('data-date', day.Date);
+                  factoryList.forEach(fac => {
+                    const opt = $('<option></option>').val(fac.FactoryCD).text(fac.FactoryName);
+                    if (fac.FactoryCD === (day.FactoryCD || defaultFactoryCD)) opt.attr('selected', 'selected');
+                    selFactory.append(opt);
+                  });
+                  tdFactory.append(selFactory);
+                }
+
+                tr.append(tdNew);
+                tr.append(tdFactory);
+                tbody.append(tr);
+              });
+            } else {
+              // モバイル表示
+              const groupedByWeek = {};
+              data.forEach(day => {
+                const weekKey = moment(day.Date).startOf('week').format('YYYY-MM-DD');
+                if (!groupedByWeek[weekKey]) groupedByWeek[weekKey] = [];
+                groupedByWeek[weekKey].push(day);
+              });
+
+              const sortedWeeks = Object.keys(groupedByWeek).sort((a, b) => moment(a).toDate() - moment(b).toDate());
+
+              sortedWeeks.forEach(weekKey => {
+                const days = groupedByWeek[weekKey].sort((a, b) => moment(a.Date).toDate() - moment(b.Date).toDate());
+                days.forEach(day => {
+                  const entry = $('<div class="mobile-entry"></div>').attr('data-factorycd', day.FactoryCD || '');
+                  const dateMoment = moment(day.Date);
+                  const isToday = dateMoment.isSame(moment(), 'day');
+                  const isPast = dateMoment.isBefore(moment(), 'day');
+                  const dateJP = dateMoment.format('MM月DD日（ddd）');
+                  const before = day.Ordered ? `${day.MenuCD}_${day.MenuName}[${day.VenderName}]` : '-';
+                  const factoryName = factoryList.find(f => f.FactoryCD === (day.FactoryCD || ''))?.FactoryName || '-';
+
+                  entry.append(`<div class="date"><strong>${dateJP}</strong>${isToday ? '<span class="today">（本日）</span>' : ''}</div>`);
+
+                  const beforeDiv = $('<div class="value"></div>').text(before);
+                  beforeDiv.attr('data-menucd', day.MenuCD || '');
+                  beforeDiv.attr('data-vendercd', day.VenderCD || '');
+                  entry.append(`<div class="row"><div class="label">登録済メニュー：</div></div>`).find('.row:last').append(beforeDiv);
+
+                  entry.append(`
+                    <div class="row">
+                      <div class="label">登録済工場：</div>
+                      <div class="value">${factoryName}</div>
+                    </div>
+                  `);
+
+                  const sel = $('<select></select>').attr('data-date', day.Date);
+                  if ((day.IsClosed && !isAdmin) || !day.Menus.length || isPast) {
+                    sel.prop('disabled', true).append('<option>変更不可</option>');
+                  } else {
+                    sel.append('<option value="NOCHANGE">変更なし</option>');
+                    day.Menus.forEach(m => {
+                      sel.append(`<option value="${m.MenuCD}_${m.VenderCD}">${m.MenuCD}_${m.MenuName}[${m.VenderName}]</option>`);
+                    });
+                  }
+                  entry.append(`
+                    <div class="row">
+                      <div class="label">変更後メニュー：</div>
+                    </div>
+                  `).find('.row:last').append(sel);
+
+                  const selFactory = $('<select class="factory-select"></select>').attr('data-date', day.Date);
+                  if ((day.IsClosed && !isAdmin) || !day.Menus.length || isPast) {
+                    selFactory.prop('disabled', true).append('<option>変更不可</option>');
+                  } else {
+                    factoryList.forEach(fac => {
+                      const opt = $('<option></option>').val(fac.FactoryCD).text(fac.FactoryName);
+                      if (fac.FactoryCD === (day.FactoryCD || defaultFactoryCD)) opt.attr('selected', 'selected');
+                      selFactory.append(opt);
+                    });
+                  }
+                  entry.append(`
+                    <div class="row">
+                      <div class="label">変更後工場：</div>
+                    </div>
+                  `).find('.row:last').append(selFactory);
+
+                  // 修正ポイント：weekDiv に entry を追加
+                  weekDiv.append(entry);
+                });
+              });
+            }
+            loadedCount++; // ★ 1週分の処理が完了
+            if (loadedCount === totalWeeks) {
+              hideLoading(); // ★ 全ての週の描画が完了したらローディング非表示
+            }
+          }).getMenuForWeek(emp, startStr, endStr, isAdmin);
+        });
+      }
+
+      // 一括設定プルダウン
+      function populateBulkSelectors(menuList, factoryList) {
+        const menuSelect = document.getElementById("bulkMenuSelect");
+        const factorySelect = document.getElementById("bulkFactorySelect");
+
+        // 既存の選択肢をクリア
+        menuSelect.innerHTML = "";
+        factorySelect.innerHTML = "";
+
+        // 重複を排除するためのSetを使用
+        const seenMenuCombo = new Set();
+
+        menuList.forEach(menu => {
+          const menuCombo = `${menu.MenuCD}_${menu.VenderCD}`;
+
+          // すでに選択肢に追加済みのメニューならスキップ
+          if (!seenMenuCombo.has(menuCombo)) {
+            const option = document.createElement("option");
+            option.value = menuCombo;
+            option.textContent = `${menu.MenuCD}_${menu.MenuName}[${menu.VenderName}]`;
+            menuSelect.appendChild(option);
+
+            // メニュー組み合わせをセットに追加
+            seenMenuCombo.add(menuCombo);
+          }
+        });
+
+        // 工場選択肢の追加（重複チェック不要）
+        factoryList.forEach(factory => {
+          const option = document.createElement("option");
+          option.value = factory.FactoryCD;
+          option.textContent = factory.FactoryName;
+          factorySelect.appendChild(option);
+        });
+
+        // 該当社員のデフォルト工場を設定
+        if (defaultFactoryCD) {
+          const defaultFactoryOption = factorySelect.querySelector(`option[value="${defaultFactoryCD}"]`);
+          if (defaultFactoryOption) {
+            defaultFactoryOption.selected = true; // 該当する工場を選択状態に
+          }
+        } 
+      }
+
+      $('#applyBulkChange').click(function () {
+        const selectedMenu = $('#bulkMenuSelect').val();
+        const selectedFactory = $('#bulkFactorySelect').val();
+        const isMobile = window.matchMedia("(max-width: 1200px)").matches;
+
+        // console.log("選択メニュー:", selectedMenu);
+        // console.log("選択工場:", selectedFactory);
+
+        if (!selectedMenu && !selectedFactory) {
+          alert('一括で適用するメニューまたは工場を選択してください');
+          return;
+        }
+
+        const targetRows = isMobile ? $('.mobile-entry') : $('#calendarContainer tbody tr');
+
+        targetRows.each(function () {
+          const row = $(this);
+          const menuSel = row.find('select[data-date]');
+          const factorySel = row.find('select.factory-select');
+
+          const dateStr = menuSel.data('date'); // "YYYY-MM-DD" 形式で取得される想定
+          const date = new Date(dateStr);
+          const day = date.getDay(); // 0:日曜, 6:土曜
+
+          // ★ 土日をスキップ
+          if (day === 0 || day === 6) {
+            console.log("スキップ（土日）:", dateStr);
+            return; // 処理を飛ばす
+          }
+
+          // メニューが当日の選択肢に存在しない場合、スキップ
+          const availableMenuOptions = menuSel.find('option').map(function() {
+            return $(this).val();
+          }).get();
+
+          if (selectedMenu && !availableMenuOptions.includes(selectedMenu)) {
+            console.log("スキップ（選択肢に存在しないメニュー）:", dateStr);
+            // メニューが存在しない場合は変更しない
+            return; // メニュー変更なし
+          }
+
+          // メニューが変更可能な場合
+          if (!menuSel.prop('disabled') && selectedMenu) {
+            menuSel.val(selectedMenu).trigger('change');
+          }
+
+          // 工場が変更可能な場合
+          if (!factorySel.prop('disabled') && selectedFactory) {
+             factorySel.val(selectedFactory).trigger('change');
+          }
+        });
+      });
+  
+      $('#submitOrder').click(function () {
+        showLoading(); // ★ 処理中表示
+
+        const emp = $('#employeeSelect').val();
+        if (!emp) {
+          alert('社員を選択してください');
+          hideLoading(); // ★ 選択されていなかった場合は非表示
+          return;
+        }
+  
+        const now = moment().format('YYYYMMDDHHmmss');
+        const selections = [];
+        const isMobile = window.matchMedia("(max-width: 1200px)").matches;
+        const targetRows = isMobile ? $('.mobile-entry') : $('#calendarContainer tbody tr');
+  
+        targetRows.each(function () {
+          const row = $(this);
+          const menuSel = row.find('select[data-date]');
+          const factorySel = row.find('select.factory-select');
+          const date = menuSel.data('date');
+          const menuVal = menuSel.val();
+          const factoryVal = factorySel.val();
+
+            // ⚠ select が disabled の場合はスキップ（過去日など）
+            if (menuSel.prop('disabled') && factorySel.prop('disabled')) {
+              return;
+            }
+  
+          let oldMenuCD = '';
+          let oldVenderCD = '';
+          let beforeFactoryCD = '';
+  
+          if (isMobile) {
+            const beforeMenuDiv = row.find('.row').eq(0).find('.value');
+            oldMenuCD = beforeMenuDiv.attr('data-menucd') || '';
+            oldVenderCD = beforeMenuDiv.attr('data-vendercd') || '';
+            beforeFactoryCD = row.attr('data-factorycd') || '';
+          } else {
+            const beforeMenuText = row.find('td:nth-child(2)').text();
+            const m = beforeMenuText.match(/^(\d+)_.*\[.*\]$/);
+            if (m) oldMenuCD = m[1];
+            beforeFactoryCD = row.attr('data-factorycd') || '';
+          }
+  
+          let newMenuCD = '';
+          let newVenderCD = '';
+          if (menuVal && menuVal !== 'NOCHANGE') {
+            [newMenuCD, newVenderCD] = menuVal.split('_');
+          }
+
+          const isMenuChanged = menuVal !== 'NOCHANGE' && (newMenuCD !== oldMenuCD || newVenderCD !== oldVenderCD);
+          const isFactoryChanged = factoryVal !== '' && factoryVal !== beforeFactoryCD;
+
+          if (isMenuChanged || isFactoryChanged) {
+            selections.push({
+              OrderDate: moment(date).format('YYYYMMDD'),
+              EmployeeCD: emp,
+              FactoryCD: factoryVal || '',
+              MenuCD: newMenuCD || '',
+              VenderCD: newVenderCD || '',
+              ActiveFlg: 1,
+              UpdateDate: now
+            });
+          }
+        });
+
+         // console.log(selections);　// デバッグ用
+
+        if (selections.length === 0) {
+          alert('変更された注文がありません。');
+          hideLoading(); // ★ 処理なしのときも非表示
+          return;
+        }
+
+        google.script.run.withSuccessHandler(function(inserted) {
+          hideLoading(); // ★ 成功時に非表示
+          if (inserted.length === 0) {
+            alert("変更された注文はありません。");
+          } else {
+            const msg = inserted.map(o => {
+              const date = new Date(o.OrderDate);
+              const dayOfWeek = ['日','月','火','水','木','金','土'][date.getDay()];
+              const menuDisplay = `${o.MenuCD}_${o.MenuName}[${o.VenderName}]`;
+              const factoryName = factoryList.find(f => f.FactoryCD === o.FactoryCD)?.FactoryName || '不明な工場'; // FactoryCDからFactoryNameを取得
+              const month = (date.getMonth() + 1).toString().padStart(2, '0'); // 月を2桁表示
+              const day = date.getDate().toString().padStart(2, '0'); // 日を2桁表示
+              return `${month}月${day}日(${dayOfWeek})：${menuDisplay} @ ${factoryName}`;
+            }).join('\n');
+            alert(`注文を${inserted.length}件登録しました：\n` + msg);
+          }
+          drawCalendar(emp); // ★ カレンダー再読み込み
+        }).saveOrderData(emp, selections, isAdmin);
+      });
+    });
+  </script>  
+</body>
+
+</html>

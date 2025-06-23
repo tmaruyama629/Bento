@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <!-- Tailwind CSSをCDN経由で読み込み -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Webフォント (Inter) を読み込み -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      /* 基本フォントを設定 */
+      body {
+        font-family: 'Inter', 'Helvetica Neue', 'Arial', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Meiryo', sans-serif;
+      }
+      /* 変更内容のリストスタイルを調整 */
+      .change-log-content ul {
+        list-style-position: outside;
+        padding-left: 1.25rem; /* 20px */
+        margin: 0;
+      }
+      .change-log-content li {
+        margin-bottom: 0.5rem; /* 8px */
+      }
+      .change-log-content li:last-child {
+        margin-bottom: 0;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-100 text-gray-800">
+    <div class="container mx-auto p-4 sm:p-6 md:p-8 max-w-4xl">
+
+      <!-- メインコンテンツカード -->
+      <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+        
+        <!-- ヘッダーエリア -->
+        <header class="p-6 border-b border-gray-200 bg-gray-50">
+          <? if (title) { ?>
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-900"><?= title ?></h1>
+          <? } ?>
+          <? if (description) { ?>
+            <p class="mt-2 text-gray-600"><?= description ?></p>
+          <? } ?>
+        </header>
+        
+        <!-- 変更履歴テーブルエリア -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm text-left text-gray-600">
+            <thead class="text-xs text-gray-700 uppercase bg-gray-100">
+              <tr>
+                <th scope="col" class="px-6 py-3 tracking-wider">バージョン</th>
+                <th scope="col" class="px-6 py-3 tracking-wider">更新日</th>
+                <th scope="col" class="px-6 py-3 tracking-wider">変更内容</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- GASから渡されたhistory配列をループ処理してテーブルの行を生成 -->
+              <? for (let i = 0; i < history.length; i++) { ?>
+                <tr class="bg-white border-b hover:bg-gray-50 transition-colors duration-200">
+                  <!-- バージョン -->
+                  <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
+                    <span class="bg-blue-100 text-blue-800 text-sm font-semibold mr-2 px-2.5 py-0.5 rounded-full"><?= history[i].version ?></span>
+                  </td>
+                  <!-- 更新日 -->
+                  <td class="px-6 py-4 whitespace-nowrap"><?= history[i].date ?></td>
+                  <!-- 変更内容 (HTMLタグをエスケープせずに表示) -->
+                  <td class="px-6 py-4 align-top change-log-content"><?!= history[i].changes ?></td>
+                </tr>
+              <? } ?>
+            </tbody>
+          </table>
+          
+          <!-- 履歴がない場合の表示 -->
+          <? if (history.length === 0) { ?>
+            <div class="p-6 text-center text-gray-500">
+              <p>表示できる変更履歴がありません。</p>
+              <p class="text-xs mt-1">Markdownファイルの形式を確認してください。</p>
+            </div>
+          <? } ?>
+
+        </div>
+      </div>
+      
+      <!-- フッター -->
+      <footer class="text-center mt-6 text-sm text-gray-500">
+        <p>Powered by Google Apps Script</p>
+      </footer>
+
+    </div>
+  </body>
+</html>
+  </body>
+</html>

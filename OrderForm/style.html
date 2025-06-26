@@ -2,11 +2,14 @@
 @fileoverview お弁当注文システムのスタイルシートです。
 @author T.Maruyama
 @since 2025-05-08
-@version 1.1.3
+@version 1.1.4
 
 =================================================================================
  変更履歴
 =================================================================================
+2025-06-26 T.Maruyama v1.1.4
+- [UI改善] モバイルとPC用のメディアクエリの分岐条件を画面幅からany-hoverに変更
+
 2025-06-26 T.Maruyama v1.1.3
 - [UI改善] 曜日表示を「土」は青色、「日」は赤色で表示するクラス追加
 - [UI改善] PC版は当日の行全体、モバイル版は当日のカード全体の背景色を薄い黄色に変更
@@ -363,8 +366,30 @@
     100% { transform: rotate(360deg); }
   }
 
-  /* === スマホ対応 === */
-  @media (max-width: 1200px) {
+  /* === PC用: any-hover: hover === */
+  @media (any-hover: hover) {
+    table {
+      display: table;
+    }
+    .bulk-set-container {
+      flex-direction: row;
+      max-width: 90%;
+    }
+    .bulk-set-item {
+      width: auto;
+    }
+    #bulkMenuSelect,
+    #bulkFactorySelect,
+    .bulk-set-container button {
+      width: auto;
+    }
+    .mobile-entry {
+      display: none;
+    }
+  }
+
+  /* === スマホ対応: any-hover: none === */
+  @media (any-hover: none) {
     table {
       display: none;
     }
@@ -374,9 +399,9 @@
       max-width: 90%;
     }
 
-  .bulk-set-item {
-    width: 100%;
-  }
+    .bulk-set-item {
+      width: 100%;
+    }
 
     #bulkMenuSelect,
     #bulkFactorySelect,
@@ -393,6 +418,7 @@
       border: 1px solid #ccc;
       font-size: 16px;
       width: 90%;
+      display: block;
     }
 
     .mobile-entry .date,

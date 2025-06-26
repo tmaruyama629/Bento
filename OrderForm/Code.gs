@@ -3,13 +3,16 @@
  * Webアプリのバックエンド処理、スプレッドシートとのデータ連携などを担当します。
  * @author T.Maruyama
  * @since 2025-05-08
- * @version 1.1.2
+ * @version 1.1.5
  */
 
 /**
  * =================================================================================
  * 変更履歴
  * =================================================================================
+ * 2025-06-25 T.Maruyama v1.1.5
+ * - [機能追加] 有効な社員のみを取得するフィルタを追加
+ *
  * 2025-06-25 T.Maruyama v1.1.1
  * - [改善] エラーハンドリング強化・APIレスポンス形式統一
  * 
@@ -103,7 +106,8 @@ function getDataFromSheet(sheetId, sheetName) {
 function getEmployeeList() {
   try {
     const values = getDataFromSheet(CONFIG.MASTER_ID, 'M_Employee');
-    return { status: 'success', data: values.map(row => ({
+    // ActiveFlg=1のみ返す
+    return { status: 'success', data: values.filter(row => row[4] === 1).map(row => ({
       EmployeeCD: row[0],
       EmployeeName: row[1]
     })) };
@@ -132,7 +136,8 @@ function getEmployeeData(empCD) {
   try {
     if (!empCD) throw new Error('社員CDが未指定です');
     const values = getDataFromSheet(CONFIG.MASTER_ID, 'M_Employee');
-    const employee = values.find(row => row[0] === empCD);
+    // ActiveFlg=1のみ有効
+    const employee = values.find(row => row[0] === empCD && row[4] === 1);
     return { status: 'success', data: { defaultFactory: employee ? employee[2] : '' } };
   } catch (error) {
     Logger.log('getEmployeeData error: ' + error.message + '\n' + error.stack);
@@ -364,7 +369,8 @@ function verifyLogin(empCD, inputPw) {
       const sheet = getSpreadsheet(CONFIG.MASTER_ID).getSheetByName('M_Employee');
       if (!sheet) throw new Error('M_Employee シートが見つかりません。');
       const values = sheet.getDataRange().getValues();
-      const employee = values.find(row => row[0] === empCD && row[3] === inputPw);
+      // ActiveFlg=1のみ有効
+      const employee = values.find(row => row[0] === empCD && row[3] === inputPw && row[4] === 1);
       if (employee) {
         return { status: 'success', data: { isValid: true, isAdmin: false, employeeCD: empCD, employeeName: employee[1] } };
       }

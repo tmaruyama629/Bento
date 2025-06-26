@@ -2,11 +2,15 @@
 @fileoverview お弁当注文システムのスタイルシートです。
 @author T.Maruyama
 @since 2025-05-08
-@version 1.1.0
+@version 1.1.3
 
 =================================================================================
  変更履歴
 =================================================================================
+2025-06-26 T.Maruyama v1.1.3
+- [UI改善] 曜日表示を「土」は青色、「日」は赤色で表示するクラス追加
+- [UI改善] PC版は当日の行全体、モバイル版は当日のカード全体の背景色を薄い黄色に変更
+
 2025-06-23 T.Maruyama v1.1.0
 - [機能変更] ログイン認証を社員CDとパスワードの組み合わせで行うように変更
 - [UI/UX改善] 社員CDテキストボックスにパスワードテキストボックスと同様のCSSを適用
@@ -324,6 +328,21 @@
     font-weight: bold;
   }
 
+  /* 曜日色分け用クラス */
+  .weekday-sat {
+    color: #0074d9; /* 青 */
+    font-weight: bold;
+  }
+  .weekday-sun {
+    color: #e53935; /* 赤 */
+    font-weight: bold;
+  }
+
+  /* PC版: 当日の行全体の背景色 */
+  tr.today-row {
+    background-color: #fffcc9 !important;
+  }
+
   .footer {
     margin-top: 20px;
     text-align: center;
@@ -439,6 +458,11 @@
     .mobile-entry .today-cell {
       background-color: #ffffcc;
       font-weight: bold;
+    }
+
+    /* モバイル版: 当日のカード全体の背景色 */
+    .mobile-entry.today-card {
+      background-color: #fffcc9 !important;
     }
 
     .mobile-entry select:focus {

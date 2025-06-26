@@ -2,11 +2,15 @@
 @fileoverview お弁当注文システムのフロントエンドUIです。
 @author T.Maruyama
 @since 2025-05-08
-@version 1.1.2
+@version 1.1.3
 
 =================================================================================
  変更履歴
 =================================================================================
+2025-06-26 T.Maruyama v1.1.3
+- [UI改善] 曜日表示を「土」は青色、「日」は赤色で表示（PC/モバイル両対応）
+- [UI改善] PC版は当日の行全体、モバイル版は当日のカード全体の背景色を薄い黄色に変更
+
 2025-06-25 T.Maruyama v1.1.2
 - [改善] エラーハンドリング強化・サーバーエラー通知UI改善
 
@@ -309,10 +313,18 @@
               const dateMoment = moment(day.Date);
               const isToday = dateMoment.isSame(moment(), 'day');
               const isPast = dateMoment.isBefore(moment(), 'day');
-              const dateJP = dateMoment.format('MM月DD日（ddd）');
-
+              // --- 曜日色分け ---
+              const dow = dateMoment.format('ddd');
+              let dowClass = '';
+              if (dow === '土') dowClass = 'weekday-sat';
+              if (dow === '日') dowClass = 'weekday-sun';
+              const dateJP = dateMoment.format('MM月DD日') + `（<span class="${dowClass}">${dow}</span>）`;
+              // -----------------
               const dateCell = $(`<td>${dateJP}</td>`);
-              if (isToday) dateCell.addClass('today-cell');
+              if (isToday) {
+                dateCell.addClass('today-cell');
+                tr.addClass('today-row'); // ★ 行全体に背景色
+              }
               tr.append(dateCell);
 
               const before = day.Ordered ? `${day.MenuCD}_${day.MenuName}[${day.VenderName}]` : '-';
@@ -364,15 +376,22 @@
             sortedWeeks.forEach(weekKey => {
               const days = groupedByWeek[weekKey].sort((a, b) => moment(a.Date).toDate() - moment(b.Date).toDate());
               days.forEach(day => {
-                const entry = $('<div class="mobile-entry"></div>').attr('data-factorycd', day.FactoryCD || '');
+                // --- 曜日色分け ---
                 const dateMoment = moment(day.Date);
                 const isToday = dateMoment.isSame(moment(), 'day');
                 const isPast = dateMoment.isBefore(moment(), 'day');
-                const dateJP = dateMoment.format('MM月DD日（ddd）');
+                const dow = dateMoment.format('ddd');
+                let dowClass = '';
+                if (dow === '土') dowClass = 'weekday-sat';
+                if (dow === '日') dowClass = 'weekday-sun';
+                const dateJP = dateMoment.format('MM月DD日') + `（<span class="${dowClass}">${dow}</span>）`;
+                // -----------------
+                const entry = $('<div class="mobile-entry"></div>').attr('data-factorycd', day.FactoryCD || '');
+                if (isToday) entry.addClass('today-card'); // ★ 当日カード背景色
+                entry.append(`<div class="date"><strong>${dateJP}</strong>${isToday ? '<span class="today">（本日）</span>' : ''}</div>`);
+
                 const before = day.Ordered ? `${day.MenuCD}_${day.MenuName}[${day.VenderName}]` : '-';
                 const factoryName = factoryList.find(f => f.FactoryCD === (day.FactoryCD || ''))?.FactoryName || '-';
-
-                entry.append(`<div class="date"><strong>${dateJP}</strong>${isToday ? '<span class="today">（本日）</span>' : ''}</div>`);
 
                 const beforeDiv = $('<div class="value"></div>').text(before);
                 beforeDiv.attr('data-menucd', day.MenuCD || '');

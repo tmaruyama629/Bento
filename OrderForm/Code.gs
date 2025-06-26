@@ -3,13 +3,16 @@
  * Webアプリのバックエンド処理、スプレッドシートとのデータ連携などを担当します。
  * @author T.Maruyama
  * @since 2025-05-08
- * @version 1.1.0
+ * @version 1.1.2
  */
 
 /**
  * =================================================================================
  * 変更履歴
  * =================================================================================
+ * 2025-06-25 T.Maruyama v1.1.1
+ * - [改善] エラーハンドリング強化・APIレスポンス形式統一
+ * 
  * 2025-06-23 T.Maruyama v1.1.0
  * - [機能変更] ログイン認証を社員CDとパスワードの組み合わせで行うように変更
  * - [機能追加] ログイン画面の入力値制限（社員CD:半角数字6桁, PW:半角英数記号）
@@ -28,8 +31,13 @@
  */
 
 function doGet() {
-  const template = HtmlService.createTemplateFromFile('index');
-  return template.evaluate().setTitle('お弁当注文フォーム');
+  try {
+    const template = HtmlService.createTemplateFromFile('index');
+    return template.evaluate().setTitle('お弁当注文フォーム');
+  } catch (error) {
+    Logger.log('doGet error: ' + error.message + '\n' + error.stack);
+    throw new Error('システムエラーが発生しました。');
+  }
 }
 
 const CONFIG = {
@@ -46,168 +54,212 @@ const CONFIG = {
 
 // 汎用設定取得
 function getConfigValue(key) {
-  const spreadsheet = SpreadsheetApp.openById(CONFIG.MASTER_ID);
-  const configSheet = spreadsheet.getSheetByName('M_Config');
-  const configValues = configSheet.getDataRange().getValues(); // すべて取得
-
-  for (let i = 0; i < configValues.length; i++) {
-    if (configValues[i][0] === key) {
-      return configValues[i][1];
+  try {
+    if (!key) throw new Error('keyが未指定です');
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.MASTER_ID);
+    const configSheet = spreadsheet.getSheetByName('M_Config');
+    if (!configSheet) throw new Error('M_Configシートが見つかりません');
+    const configValues = configSheet.getDataRange().getValues();
+    for (let i = 0; i < configValues.length; i++) {
+      if (configValues[i][0] === key) {
+        return configValues[i][1];
+      }
     }
+    return null;
+  } catch (error) {
+    Logger.log('getConfigValue error: ' + error.message + '\n' + error.stack);
+    throw error;
   }
-  return null; // 見つからなかった場合
 }
 
 // 共通のスプレッドシート取得関数
 function getSpreadsheet(sheetId) {
   try {
+    if (!sheetId) throw new Error('sheetIdが未指定です');
     return SpreadsheetApp.openById(sheetId);
   } catch (error) {
+    Logger.log('getSpreadsheet error: ' + error.message + '\n' + error.stack);
     throw new Error(`スプレッドシートの取得に失敗しました: ${sheetId}`);
   }
 }
 
 // データ取得共通化
-// 修正: 指定シートが見つからない場合にエラーをスローする処理を追加
 function getDataFromSheet(sheetId, sheetName) {
-  const sheet = getSpreadsheet(sheetId).getSheetByName(sheetName);
-  if (!sheet) {
-    throw new Error(`シート ${sheetName} が見つかりません。`);
+  try {
+    if (!sheetId || !sheetName) throw new Error('sheetIdまたはsheetNameが未指定です');
+    const sheet = getSpreadsheet(sheetId).getSheetByName(sheetName);
+    if (!sheet) {
+      throw new Error(`シート ${sheetName} が見つかりません。`);
+    }
+    const values = sheet.getDataRange().getValues();
+    return values.slice(1);
+  } catch (error) {
+    Logger.log('getDataFromSheet error: ' + error.message + '\n' + error.stack);
+    throw error;
   }
-  const values = sheet.getDataRange().getValues();
-  return values.slice(1); // ヘッダー除外
 }
 
 // 社員一覧取得
 function getEmployeeList() {
-  const values = getDataFromSheet(CONFIG.MASTER_ID, 'M_Employee');
-  return values.map(row => ({
-    EmployeeCD: row[0],
-    EmployeeName: row[1]
-  }));
+  try {
+    const values = getDataFromSheet(CONFIG.MASTER_ID, 'M_Employee');
+    return { status: 'success', data: values.map(row => ({
+      EmployeeCD: row[0],
+      EmployeeName: row[1]
+    })) };
+  } catch (error) {
+    Logger.log('getEmployeeList error: ' + error.message + '\n' + error.stack);
+    return { status: 'error', message: '社員一覧の取得に失敗しました。' };
+  }
 }
 
 // 工場一覧取得
 function getFactoryList() {
-  const values = getDataFromSheet(CONFIG.MASTER_ID, 'M_Factory');
-  return values.map(row => ({
-    FactoryCD: row[0],
-    FactoryName: row[1]
-  }));
+  try {
+    const values = getDataFromSheet(CONFIG.MASTER_ID, 'M_Factory');
+    return { status: 'success', data: values.map(row => ({
+      FactoryCD: row[0],
+      FactoryName: row[1]
+    })) };
+  } catch (error) {
+    Logger.log('getFactoryList error: ' + error.message + '\n' + error.stack);
+    return { status: 'error', message: '工場一覧の取得に失敗しました。' };
+  }
 }
 
 // 社員のデフォルト工場を取得
 function getEmployeeData(empCD) {
-  const values = getDataFromSheet(CONFIG.MASTER_ID, 'M_Employee');
-  const employee = values.find(row => row[0] === empCD);
-  return { defaultFactory: employee ? employee[2] : '' };
+  try {
+    if (!empCD) throw new Error('社員CDが未指定です');
+    const values = getDataFromSheet(CONFIG.MASTER_ID, 'M_Employee');
+    const employee = values.find(row => row[0] === empCD);
+    return { status: 'success', data: { defaultFactory: employee ? employee[2] : '' } };
+  } catch (error) {
+    Logger.log('getEmployeeData error: ' + error.message + '\n' + error.stack);
+    return { status: 'error', message: '社員データの取得に失敗しました。' };
+  }
 }
 
 // 休日取得
 function getHolidayMap() {
-  const values = getDataFromSheet(CONFIG.MASTER_ID, 'M_Holiday');
-  const holidayMap = {};
-  values.forEach(row => {
-    const date = formatDate(row[0]); // yyyy-MM-dd に変換
-    holidayMap[date] = true;
-  });
-  return holidayMap;
+  try {
+    const values = getDataFromSheet(CONFIG.MASTER_ID, 'M_Holiday');
+    const holidayMap = {};
+    values.forEach(row => {
+      const date = formatDate(row[0]);
+      holidayMap[date] = true;
+    });
+    return holidayMap;
+  } catch (error) {
+    Logger.log('getHolidayMap error: ' + error.message + '\n' + error.stack);
+    throw error;
+  }
 }
 
 // コメント取得
 function getComment() {
-  const values = getDataFromSheet(CONFIG.MASTER_ID, 'M_Comment');
-  return values.map(row => ({
-    CommentCD: row[0],
-    CommentText: row[1],
-    HyperLink: row[2]
-  }));
+  try {
+    const values = getDataFromSheet(CONFIG.MASTER_ID, 'M_Comment');
+    return { status: 'success', data: values.map(row => ({
+      CommentCD: row[0],
+      CommentText: row[1],
+      HyperLink: row[2]
+    })) };
+  } catch (error) {
+    Logger.log('getComment error: ' + error.message + '\n' + error.stack);
+    return { status: 'error', message: 'コメントの取得に失敗しました。' };
+  }
 }
 
-
 // 指定週のメニューを取得
-function getMenuForWeek(empCD, startDate, endDate, isAdmin = false) {
-  const now = new Date();
-  const currentDateStr = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy/MM/dd');
-  const weekDays = getDaysInRange(startDate, endDate);
-  const spreadsheet = getSpreadsheet(CONFIG.MASTER_ID);
+function getMenuForWeek(empCD, startDate, endDate, isAdmin) {
+  try {
+    if (!empCD || !startDate || !endDate) throw new Error('パラメータが不足しています');
+    const now = new Date();
+    const currentDateStr = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy/MM/dd');
+    const weekDays = getDaysInRange(startDate, endDate);
+    const spreadsheet = getSpreadsheet(CONFIG.MASTER_ID);
 
-  // M_Config から締切時間を取得
-  const deadlineStr = getConfigValue('DeadlineTime') || '09:00';
-  const [deadlineHour, deadlineMinute] = deadlineStr.split(':').map(Number);
+    // M_Config から締切時間を取得
+    const deadlineStr = getConfigValue('DeadlineTime') || '09:00';
+    const [deadlineHour, deadlineMinute] = deadlineStr.split(':').map(Number);
 
-  const menuSheet = spreadsheet.getSheetByName('M_Menu');
-  const venderSheet = spreadsheet.getSheetByName('M_Vender');
-  const orderSheet = getSpreadsheet(CONFIG.ORDER_ID).getSheetByName(CONFIG.ORDER_SHEET);
-  const holidayMap = getHolidayMap();
+    const menuSheet = spreadsheet.getSheetByName('M_Menu');
+    const venderSheet = spreadsheet.getSheetByName('M_Vender');
+    const orderSheet = getSpreadsheet(CONFIG.ORDER_ID).getSheetByName(CONFIG.ORDER_SHEET);
+    const holidayMap = getHolidayMap();
 
-  if (!menuSheet || !venderSheet || !orderSheet) {
-    Logger.log("必要なシートが見つかりません。");
-    return [];
-  }
-
-  const menuValues = menuSheet.getDataRange().getValues();
-  const venderValues = venderSheet.getDataRange().getValues();
-  const orderValues = orderSheet.getDataRange().getValues();
-
-  const venderMap = createVenderMap(venderValues);
-  const menuMap = createMenuMap(menuValues, venderMap);
-
-  const weekData = weekDays.map(date => {
-    const isHoliday = !!holidayMap[date];
-    const dateObj = new Date(date);
-    const isSameDay = Utilities.formatDate(dateObj, Session.getScriptTimeZone(), 'yyyy/MM/dd') === currentDateStr;
-
-    // 締切時間の Date を生成して比較
-    const deadline = new Date(dateObj);
-    deadline.setHours(deadlineHour, deadlineMinute, 0, 0);
-    const isPastDeadline = !isAdmin && isSameDay && now > deadline;
-    const isClosed = isHoliday || (isAdmin ? false : isPastDeadline);
-
-    // 注文情報取得
-    const order = findOrderForDate(orderValues, empCD, date);
-
-    // 注文済み情報セット
-    let orderedMenuCD = '';
-    let orderedMenuName = '';
-    let orderedVenderCD = '';
-    let orderedVenderName = '';
-    let orderedFactoryCD = '';
-    let ordered = false;
-
-    if (order) {
-      const menuCD = order[4]?.toString().trim();
-      const venderCD = order[5]?.toString().trim();
-      const factoryCD = order[3]?.toString().trim();
-      const key = `${menuCD}_${venderCD}`;
-      if (menuMap[key]) {
-        orderedMenuCD = menuMap[key].MenuCD;
-        orderedMenuName = menuMap[key].MenuName;
-        orderedVenderCD = venderCD;
-        orderedVenderName = venderMap[venderCD] || '';
-        orderedFactoryCD = factoryCD;
-        ordered = true;
-      }
+    if (!menuSheet || !venderSheet || !orderSheet) {
+      Logger.log("必要なシートが見つかりません。");
+      return [];
     }
 
-    // メニュー詳細リスト生成
-    const menuDetails = getMenuDetailsForDate(date, menuValues, venderMap, isAdmin);
+    const menuValues = menuSheet.getDataRange().getValues();
+    const venderValues = venderSheet.getDataRange().getValues();
+    const orderValues = orderSheet.getDataRange().getValues();
 
-    return {
-      Date: date,
-      IsHoliday: isHoliday,
-      IsClosed: isClosed,
-      Ordered: ordered,
-      MenuCD: orderedMenuCD,
-      MenuName: orderedMenuName,
-      VenderCD: orderedVenderCD,
-      VenderName: orderedVenderName,
-      FactoryCD: order ? order[3] : '',
-      Menus: menuDetails
-    };
-  });
+    const venderMap = createVenderMap(venderValues);
+    const menuMap = createMenuMap(menuValues, venderMap);
 
-  return weekData;
+    const weekData = weekDays.map(date => {
+      const isHoliday = !!holidayMap[date];
+      const dateObj = new Date(date);
+      const isSameDay = Utilities.formatDate(dateObj, Session.getScriptTimeZone(), 'yyyy/MM/dd') === currentDateStr;
+
+      // 締切時間の Date を生成して比較
+      const deadline = new Date(dateObj);
+      deadline.setHours(deadlineHour, deadlineMinute, 0, 0);
+      const isPastDeadline = !isAdmin && isSameDay && now > deadline;
+      const isClosed = isHoliday || (isAdmin ? false : isPastDeadline);
+
+      // 注文情報取得
+      const order = findOrderForDate(orderValues, empCD, date);
+
+      // 注文済み情報セット
+      let orderedMenuCD = '';
+      let orderedMenuName = '';
+      let orderedVenderCD = '';
+      let orderedVenderName = '';
+      let orderedFactoryCD = '';
+      let ordered = false;
+
+      if (order) {
+        const menuCD = order[4]?.toString().trim();
+        const venderCD = order[5]?.toString().trim();
+        const factoryCD = order[3]?.toString().trim();
+        const key = `${menuCD}_${venderCD}`;
+        if (menuMap[key]) {
+          orderedMenuCD = menuMap[key].MenuCD;
+          orderedMenuName = menuMap[key].MenuName;
+          orderedVenderCD = venderCD;
+          orderedVenderName = venderMap[venderCD] || '';
+          orderedFactoryCD = factoryCD;
+          ordered = true;
+        }
+      }
+
+      // メニュー詳細リスト生成
+      const menuDetails = getMenuDetailsForDate(date, menuValues, venderMap, isAdmin);
+
+      return {
+        Date: date,
+        IsHoliday: isHoliday,
+        IsClosed: isClosed,
+        Ordered: ordered,
+        MenuCD: orderedMenuCD,
+        MenuName: orderedMenuName,
+        VenderCD: orderedVenderCD,
+        VenderName: orderedVenderName,
+        FactoryCD: order ? order[3] : '',
+        Menus: menuDetails
+      };
+    });
+
+    return { status: 'success', data: weekData };
+  } catch (error) {
+    Logger.log('getMenuForWeek error: ' + error.message + '\n' + error.stack);
+    return { status: 'error', message: 'メニュー情報の取得に失敗しました。' };
+  }
 }
 
 // ベンダーマップ生成
@@ -301,32 +353,35 @@ function formatDate(value) {
 
 // ログイン認証
 function verifyLogin(empCD, inputPw) {
-  if (empCD === '999999') {
-    const adminPw = getConfigValue('AdminPassword');
-    if (inputPw === adminPw) {
-      return { isValid: true, isAdmin: true, employeeCD: empCD };
+  try {
+    if (!empCD || !inputPw) throw new Error('社員CDまたはパスワードが未入力です');
+    if (empCD === '999999') {
+      const adminPw = getConfigValue('AdminPassword');
+      if (inputPw === adminPw) {
+        return { status: 'success', data: { isValid: true, isAdmin: true, employeeCD: empCD } };
+      }
+    } else {
+      const sheet = getSpreadsheet(CONFIG.MASTER_ID).getSheetByName('M_Employee');
+      if (!sheet) throw new Error('M_Employee シートが見つかりません。');
+      const values = sheet.getDataRange().getValues();
+      const employee = values.find(row => row[0] === empCD && row[3] === inputPw);
+      if (employee) {
+        return { status: 'success', data: { isValid: true, isAdmin: false, employeeCD: empCD, employeeName: employee[1] } };
+      }
     }
-  } else {
-    const sheet = getSpreadsheet(CONFIG.MASTER_ID).getSheetByName('M_Employee');
-    if (!sheet) {
-      throw new Error('M_Employee シートが見つかりません。');
-    }
-    const values = sheet.getDataRange().getValues();
-    const employee = values.find(row => row[0] === empCD && row[3] === inputPw);
-    if (employee) {
-      return { isValid: true, isAdmin: false, employeeCD: empCD, employeeName: employee[1] }; 
-    }
+    return { status: 'success', data: { isValid: false, isAdmin: false } };
+  } catch (error) {
+    Logger.log('verifyLogin error: ' + error.message + '\n' + error.stack);
+    return { status: 'error', message: '認証処理でエラーが発生しました。' };
   }
-  return { isValid: false, isAdmin: false };
 }
 
 // 注文保存処理
 function saveOrderData(employeeCD, orders, isAdmin) {
-  // ロック取得（30秒待機）
   const lock = LockService.getScriptLock();
-  lock.waitLock(30); // 30秒
-
+  lock.waitLock(30);
   try {
+    if (!employeeCD || !Array.isArray(orders)) throw new Error('パラメータが不正です');
     const holidayMap = getHolidayMap();
     const dbSheet = SpreadsheetApp.openById(CONFIG.ORDER_ID).getSheetByName(CONFIG.ORDER_SHEET);
     const now = new Date();
@@ -386,7 +441,10 @@ function saveOrderData(employeeCD, orders, isAdmin) {
     });
 
     Logger.log('insertedOrders: ' + JSON.stringify(insertedOrders));
-    return insertedOrders;
+    return { status: 'success', data: insertedOrders };
+  } catch (error) {
+    Logger.log('saveOrderData error: ' + error.message + '\n' + error.stack);
+    return { status: 'error', message: '注文保存処理でエラーが発生しました。' };
   } finally {
     lock.releaseLock();
   }

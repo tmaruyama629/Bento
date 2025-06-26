@@ -2,11 +2,14 @@
 @fileoverview お弁当注文システムのフロントエンドUIです。
 @author T.Maruyama
 @since 2025-05-08
-@version 1.1.1
+@version 1.1.2
 
 =================================================================================
  変更履歴
 =================================================================================
+2025-06-25 T.Maruyama v1.1.2
+- [改善] エラーハンドリング強化・サーバーエラー通知UI改善
+
 2025-06-24 T.Maruyama v1.1.1
 - [UI改善] ログイン画面の初期フォーカスを社員CD欄に変更
 
@@ -110,6 +113,19 @@
       });
     });
 
+    function onFailure(error) {
+      console.error('サーバーエラー:', error);
+      let msg = "エラーが発生しました。時間をおいて再度お試しください。";
+      if (error && error.message) msg += "\n" + error.message;
+      alert(msg);
+      const errMsgDiv = document.getElementById("error-message");
+      if (errMsgDiv) {
+        errMsgDiv.textContent = msg;
+        errMsgDiv.style.display = "block";
+      }
+      hideLoading && hideLoading();
+    }
+
     function handleLoginKeyPress(event) {
       if (event.key === "Enter") {
         checkPassword();
@@ -117,36 +133,69 @@
     }
 
     function checkPassword() {
-      const emp = document.getElementById('employeeCD').value;
-      const pw = document.getElementById('password').value;
-      google.script.run.withSuccessHandler(function(result) {
-        if (result.isValid) {
-          isAdmin = result.isAdmin;
-          document.getElementById("error-message").style.display = "none";
-          document.getElementById("login-container").style.display = "none";
-          document.getElementById("form-container").style.display = "block";
-          if (!result.isAdmin) {
-            // ログイン時に入力された社員CDのみを表示し、プルダウンを非活性化
-            // 社員名も表示するように変更
+      const empInput = document.getElementById('employeeCD');
+      const pwInput = document.getElementById('password');
+      if (!empInput || !pwInput) {
+        alert('システムエラー：入力欄が見つかりません');
+        return;
+      }
+      const emp = empInput.value;
+      const pw = pwInput.value;
+      // 入力バリデーション
+      if (!emp || emp.length !== 6) {
+        showError('社員CDは6桁の半角数字で入力してください。');
+        return;
+      }
+      if (!pw) {
+        showError('パスワードを入力してください。');
+        return;
+      }
+      google.script.run.withFailureHandler(onFailure).withSuccessHandler(function(result) {
+        if (!result || result.status !== 'success') {
+          showError(result && result.message ? result.message : '認証処理でエラーが発生しました。');
+          return;
+        }
+        const data = result.data;
+        if (data.isValid) {
+          isAdmin = data.isAdmin;
+          hideError();
+          const loginContainer = document.getElementById("login-container");
+          const formContainer = document.getElementById("form-container");
+          if (loginContainer) loginContainer.style.display = "none";
+          if (formContainer) formContainer.style.display = "block";
+          if (!data.isAdmin) {
             const employeeSelect = document.getElementById("employeeSelect");
-            employeeSelect.innerHTML = "";
-            const option = document.createElement("option");
-            option.value = result.employeeCD;
-            option.textContent = `${result.employeeCD}_${result.employeeName}`; // 社員名を追加
-            option.selected = true;
-            employeeSelect.appendChild(option);
-            employeeSelect.disabled = true;
+            if (employeeSelect) {
+              employeeSelect.innerHTML = "";
+              const option = document.createElement("option");
+              option.value = data.employeeCD;
+              option.textContent = `${data.employeeCD}_${data.employeeName}`;
+              option.selected = true;
+              employeeSelect.appendChild(option);
+              employeeSelect.disabled = true;
+            }
           }
-          if (isAdmin) {
-            document.getElementById("form-title").textContent = "お弁当注文フォーム(管理者)";
-          } else {
-            document.getElementById("form-title").textContent = "お弁当注文フォーム";
-          }
-          drawCalendar(result.employeeCD); // 通常ログイン時もカレンダーを自動表示
+          const formTitle = document.getElementById("form-title");
+          if (formTitle) formTitle.textContent = isAdmin ? "お弁当注文フォーム(管理者)" : "お弁当注文フォーム";
+          drawCalendar(data.employeeCD);
         } else {
-          document.getElementById("error-message").style.display = "block";
+          showError('認証情報が誤っています。');
         }
       }).verifyLogin(emp, pw);
+    }
+
+    function showError(msg) {
+      const errMsgDiv = document.getElementById("error-message");
+      if (errMsgDiv) {
+        errMsgDiv.textContent = msg;
+        errMsgDiv.style.display = "block";
+      } else {
+        alert(msg);
+      }
+    }
+    function hideError() {
+      const errMsgDiv = document.getElementById("error-message");
+      if (errMsgDiv) errMsgDiv.style.display = "none";
     }
 
     function showLoading() {
@@ -158,25 +207,25 @@
     }
 
     function displayComments() {
-      google.script.run.withSuccessHandler(function (comments) {
+      google.script.run.withFailureHandler(onFailure).withSuccessHandler(function (result) {
+        if (!result || result.status !== 'success') {
+          alert(result && result.message ? result.message : 'お知らせの取得に失敗しました。');
+          return;
+        }
+        const comments = result.data;
         const container = document.getElementById("comment-area");
+        if (!container) return;
         container.innerHTML = "";
-
-        // お知らせ見出しを追加
         const heading = document.createElement("h3");
         heading.textContent = "-お知らせ-";
         heading.style.marginBottom = "10px";
         heading.style.fontSize = "20px";
         heading.style.color = "#333";
         container.appendChild(heading);
-
-        // 各コメントを表示
         comments.forEach(comment => {
           const block = document.createElement("div");
           block.className = "comment-block";
-
           const para = document.createElement("p");
-
           if (comment.HyperLink) {
             const link = document.createElement("a");
             link.href = comment.HyperLink;
@@ -188,7 +237,6 @@
           } else {
             para.textContent = comment.CommentText;
           }
-
           block.appendChild(para);
           container.appendChild(block);
         });
@@ -205,12 +253,9 @@
     const currentWeekStart = moment().startOf('week').add(1, 'days');
 
     function drawCalendar(emp) {
-      showLoading(); // ★ 処理中表示開始
-
+      showLoading();
       $('#calendarContainer').empty();
       const isMobile = window.matchMedia("(max-width: 1200px)").matches;
-
-      // 週情報をまとめて配列に格納してソート
       const weekList = [];
       for (let w = 0; w < 3; w++) {
         const start = moment(currentWeekStart).add(w, 'weeks');
@@ -222,19 +267,14 @@
           endStr: end.format('YYYY-MM-DD')
         });
       }
-
       weekList.sort((a, b) => a.start - b.start);
-
-      let loadedCount = 0; // ★ 完了数をカウント
+      let loadedCount = 0;
       const totalWeeks = weekList.length;
-
       weekList.forEach(({ start, end, startStr, endStr }) => {
         const weekDiv = $('<div class="week-container"></div>');
-
         let table;
         if (!isMobile) {
           weekDiv.append(`<h2 class="week-title">${startStr} ～ ${endStr}</h2>`);
-
           table = $(`
             <table>
               <thead>
@@ -254,7 +294,13 @@
 
         $('#calendarContainer').append(weekDiv); // PC/モバイル共通で週単位divを追加
 
-        google.script.run.withSuccessHandler(data => {
+        google.script.run.withFailureHandler(onFailure).withSuccessHandler(function(result) {
+          if (!result || result.status !== 'success') {
+            alert(result && result.message ? result.message : 'メニュー情報の取得に失敗しました。');
+            hideLoading();
+            return;
+          }
+          const data = result.data;
           populateBulkSelectors(data.flatMap(d => d.Menus), factoryList);
           if (!isMobile) {
             const tbody = table.find('tbody');
@@ -431,8 +477,12 @@
     $(function () {
       moment.locale('ja');
   
-      google.script.run.withSuccessHandler(empList => {
-        empList.forEach(emp => {
+      google.script.run.withFailureHandler(onFailure).withSuccessHandler(function(result) {
+        if (!result || result.status !== 'success') {
+          alert(result && result.message ? result.message : '社員一覧の取得に失敗しました。');
+          return;
+        }
+        result.data.forEach(emp => {
           $('#employeeSelect').append(new Option(
             `${emp.EmployeeCD}_${emp.EmployeeName}`,
             emp.EmployeeCD
@@ -440,8 +490,12 @@
         });
       }).getEmployeeList();
   
-      google.script.run.withSuccessHandler(facList => {
-        factoryList = facList;
+      google.script.run.withFailureHandler(onFailure).withSuccessHandler(function(result) {
+        if (!result || result.status !== 'success') {
+          alert(result && result.message ? result.message : '工場一覧の取得に失敗しました。');
+          return;
+        }
+        factoryList = result.data;
       }).getFactoryList();
   
       $('#employeeSelect').change(function () {
@@ -451,8 +505,12 @@
           return;
         }
   
-        google.script.run.withSuccessHandler(res => {
-          defaultFactoryCD = res.defaultFactory;
+        google.script.run.withFailureHandler(onFailure).withSuccessHandler(function(res) {
+          if (!res || res.status !== 'success') {
+            alert(res && res.message ? res.message : '社員データの取得に失敗しました。');
+            return;
+          }
+          defaultFactoryCD = res.data.defaultFactory;
           drawCalendar(emp);
         }).getEmployeeData(emp);
       });
@@ -584,8 +642,13 @@
           return;
         }
 
-        google.script.run.withSuccessHandler(function(inserted) {
+        google.script.run.withFailureHandler(onFailure).withSuccessHandler(function(result) {
           hideLoading(); // ★ 成功時に非表示
+          if (!result || result.status !== 'success') {
+            alert(result && result.message ? result.message : '注文登録に失敗しました。');
+            return;
+          }
+          const inserted = result.data;
           if (inserted.length === 0) {
             alert("変更された注文はありません。");
           } else {

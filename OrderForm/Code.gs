@@ -3,13 +3,16 @@
  * Webアプリのバックエンド処理、スプレッドシートとのデータ連携などを担当します。
  * @author T.Maruyama
  * @since 2025-05-08
- * @version 1.1.5
+ * @version 1.1.6
  */
 
 /**
  * =================================================================================
  * 変更履歴
  * =================================================================================
+ * 2025-06-27 T.Maruyama v1.1.6
+ * - [バグ修正] 管理者ログイン時でも休日はメニュー/工場プルダウン非活性・注文登録不可となるようサーバー・フロント両方の判定式を修正
+ *
  * 2025-06-25 T.Maruyama v1.1.5
  * - [機能追加] 有効な社員のみを取得するフィルタを追加
  *
@@ -215,7 +218,7 @@ function getMenuForWeek(empCD, startDate, endDate, isAdmin) {
       const deadline = new Date(dateObj);
       deadline.setHours(deadlineHour, deadlineMinute, 0, 0);
       const isPastDeadline = !isAdmin && isSameDay && now > deadline;
-      const isClosed = isHoliday || (isAdmin ? false : isPastDeadline);
+      const isClosed = isHoliday || isPastDeadline;
 
       // 注文情報取得
       const order = findOrderForDate(orderValues, empCD, date);
@@ -523,13 +526,13 @@ function getMasterData() {
 
 // 締切・休日判定
 function isOrderClosed(orderDate, now, nowDateStr, orderDateStr, holidayMap, isAdmin, deadlineHour, deadlineMinute) {
-  const isSameDay = nowDateStr === orderDateStr;
-  const isPastDate = new Date(orderDateStr) < new Date(nowDateStr);
+  const isHoliday = !!holidayMap[orderDateStr];
+  const isPastDate = orderDateStr < nowDateStr;
   const deadline = new Date(orderDate);
   deadline.setHours(deadlineHour, deadlineMinute, 0, 0);
-  const isPastDeadline = isSameDay && now > deadline;
-  const isHoliday = !!holidayMap[orderDateStr];
-  return !isAdmin && (isHoliday || isPastDeadline || isPastDate);
+  const isPastDeadline = now > deadline && orderDateStr === nowDateStr;
+  // 管理者でも休日は常に登録不可
+  return isHoliday || (!isAdmin && (isPastDeadline || isPastDate));
 }
 
 // 既存注文検索

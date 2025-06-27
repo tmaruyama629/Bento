@@ -2,11 +2,13 @@
 @fileoverview お弁当注文システムのフロントエンドUIです。
 @author T.Maruyama
 @since 2025-05-08
-@version 1.1.4
-
+@version 1.1.6
 =================================================================================
  変更履歴
 =================================================================================
+2025-06-27 T.Maruyama v1.1.6
+- [バグ修正] 管理者ログイン時でも休日はメニュー/工場プルダウン非活性・注文登録不可となるよう判定式を修正
+
 2025-06-26 T.Maruyama v1.1.4
 - [UI改善] モバイルとPC用のメディアクエリの分岐条件を画面幅からany-hoverに変更
 
@@ -340,7 +342,7 @@
               const tdNew = $('<td></td>');
               const tdFactory = $('<td></td>');
 
-              if ((day.IsClosed && !isAdmin) || !day.Menus.length || isPast) {
+              if ((day.IsClosed) || !day.Menus.length || isPast) {
                 const sel = $('<select disabled><option>変更不可</option></select>').attr('data-date', day.Date);
                 const selFactory = $('<select class="factory-select" disabled><option>変更不可</option></select>').attr('data-date', day.Date);
                 tdNew.append(sel);
@@ -410,7 +412,7 @@
                 `);
 
                 const sel = $('<select></select>').attr('data-date', day.Date);
-                if ((day.IsClosed && !isAdmin) || !day.Menus.length || isPast) {
+                if ((day.IsClosed) || !day.Menus.length || isPast) {
                   sel.prop('disabled', true).append('<option>変更不可</option>');
                 } else {
                   sel.append('<option value="NOCHANGE">変更なし</option>');
@@ -425,7 +427,7 @@
                 `).find('.row:last').append(sel);
 
                 const selFactory = $('<select class="factory-select"></select>').attr('data-date', day.Date);
-                if ((day.IsClosed && !isAdmin) || !day.Menus.length || isPast) {
+                if ((day.IsClosed) || !day.Menus.length || isPast) {
                   selFactory.prop('disabled', true).append('<option>変更不可</option>');
                 } else {
                   factoryList.forEach(fac => {

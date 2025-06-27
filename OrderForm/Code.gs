@@ -3,13 +3,16 @@
  * Webアプリのバックエンド処理、スプレッドシートとのデータ連携などを担当します。
  * @author T.Maruyama
  * @since 2025-05-08
- * @version 1.1.8
+ * @version 1.1.9
  */
 
 /**
  * =================================================================================
  * 変更履歴
  * =================================================================================
+ * 2025-06-27 T.Maruyama v1.1.9
+ * - [機能追加] 工場マスタから有効な工場のみを取得するフィルタを追加
+ *
  * 2025-06-27 T.Maruyama v1.1.8
  * - [機能追加] 休日マスタから有効な休日のみを取得するフィルタを追加
  *
@@ -131,7 +134,8 @@ function getEmployeeList() {
 function getFactoryList() {
   try {
     const values = getDataFromSheet(CONFIG.MASTER_ID, 'M_Factory');
-    return { status: 'success', data: values.map(row => ({
+    // ActiveFlg=1のみ返す
+    return { status: 'success', data: values.filter(row => row[2] === 1).map(row => ({
       FactoryCD: row[0],
       FactoryName: row[1]
     })) };

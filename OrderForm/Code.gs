@@ -3,13 +3,16 @@
  * Webアプリのバックエンド処理、スプレッドシートとのデータ連携などを担当します。
  * @author T.Maruyama
  * @since 2025-05-08
- * @version 1.1.7
+ * @version 1.1.8
  */
 
 /**
  * =================================================================================
  * 変更履歴
  * =================================================================================
+ * 2025-06-27 T.Maruyama v1.1.8
+ * - [機能追加] 休日マスタから有効な休日のみを取得するフィルタを追加
+ *
  * 2025-06-27 T.Maruyama v1.1.7
  * - [機能追加] メニューマスタから有効なメニューのみを取得するフィルタを追加
  * 
@@ -42,8 +45,8 @@
 function doGet() {
   try {
     const template = HtmlService.createTemplateFromFile('index');
-    return template.evaluate().setTitle('お弁当注文フォーム');
-    // return template.evaluate().setTitle('お弁当注文フォーム【開発系】[');    
+    // return template.evaluate().setTitle('お弁当注文フォーム');
+    return template.evaluate().setTitle('お弁当注文フォーム【開発系】');    
   } catch (error) {
     Logger.log('doGet error: ' + error.message + '\n' + error.stack);
     throw new Error('システムエラーが発生しました。');
@@ -155,12 +158,24 @@ function getEmployeeData(empCD) {
 // 休日取得
 function getHolidayMap() {
   try {
-    const values = getDataFromSheet(CONFIG.MASTER_ID, 'M_Holiday');
+    // ヘッダー＋データ全体を取得
+    const sheet = getSpreadsheet(CONFIG.MASTER_ID).getSheetByName('M_Holiday');
+    if (!sheet) throw new Error('M_Holidayシートが見つかりません');
+    const values = sheet.getDataRange().getValues();
+    const header = values[0];
+    const dateIdx = header.indexOf('HolidayDate');
+    const activeFlgIdx = header.indexOf('ActiveFlg');
     const holidayMap = {};
-    values.forEach(row => {
-      const date = formatDate(row[0]);
-      holidayMap[date] = true;
-    });
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i];
+      // ActiveFlg=1のみ有効な休日として扱う
+      if (row[activeFlgIdx] !== 1) continue;
+      const date = row[dateIdx];
+      if (date) {
+        const formatted = formatDate(date);
+        holidayMap[formatted] = true;
+      }
+    }
     return holidayMap;
   } catch (error) {
     Logger.log('getHolidayMap error: ' + error.message + '\n' + error.stack);

@@ -3,18 +3,21 @@
  * Webアプリのバックエンド処理、スプレッドシートとのデータ連携などを担当します。
  * @author T.Maruyama
  * @since 2025-05-08
- * @version 1.1.6
+ * @version 1.1.7
  */
 
 /**
  * =================================================================================
  * 変更履歴
  * =================================================================================
+ * 2025-06-27 T.Maruyama v1.1.7
+ * - [機能追加] メニューマスタから有効なメニューのみを取得するフィルタを追加
+ * 
  * 2025-06-27 T.Maruyama v1.1.6
  * - [バグ修正] 管理者ログイン時でも休日はメニュー/工場プルダウン非活性・注文登録不可となるようサーバー・フロント両方の判定式を修正
  *
  * 2025-06-25 T.Maruyama v1.1.5
- * - [機能追加] 有効な社員のみを取得するフィルタを追加
+ * - [機能追加] 社員マスタから有効な社員のみを取得するフィルタを追加
  *
  * 2025-06-25 T.Maruyama v1.1.1
  * - [改善] エラーハンドリング強化・APIレスポンス形式統一
@@ -40,6 +43,7 @@ function doGet() {
   try {
     const template = HtmlService.createTemplateFromFile('index');
     return template.evaluate().setTitle('お弁当注文フォーム');
+    // return template.evaluate().setTitle('お弁当注文フォーム【開発系】[');    
   } catch (error) {
     Logger.log('doGet error: ' + error.message + '\n' + error.stack);
     throw new Error('システムエラーが発生しました。');
@@ -301,11 +305,20 @@ function findOrderForDate(orderValues, empCD, date) {
   );
 }
 
+// メニュー抽出
+function filterMenusForDate(date, menuValues) {
+  const jsDate = new Date(date);
+  const dow = jsDate.getDay(); // 0:Sun ～ 6:Sat
+  const colIndex = 3 + dow; // M_Menuシートの曜日列は3列目から
+  // ActiveFlg=1のみ返す
+  return menuValues.slice(1).filter(row => row[colIndex] === 1 && row[11] === 1);
+}
+
 // メニュー詳細リスト生成
 function getMenuDetailsForDate(date, menuValues, venderMap, isAdmin) {
   const menus = filterMenusForDate(date, menuValues);
   return menus
-    .filter(m => isAdmin || m[10] === 1)
+    .filter(m => isAdmin || m[10] === 1) // さらにDispFlg=1のみ（従来通り）
     .map(m => {
       const venderCD = m[1];
       const venderName = venderMap[venderCD] || '';
@@ -329,14 +342,6 @@ function getDaysInRange(startDate, endDate) {
     currentDate.setDate(currentDate.getDate() + 1);
   }
   return days;
-}
-
-// メニュー抽出
-function filterMenusForDate(date, menuValues) {
-  const jsDate = new Date(date);
-  const dow = jsDate.getDay(); // 0:Sun ～ 6:Sat
-  const colIndex = 3 + dow; // M_Menuシートの曜日列は3列目から
-  return menuValues.slice(1).filter(row => row[colIndex] === 1);
 }
 
 // 日付フォーマット

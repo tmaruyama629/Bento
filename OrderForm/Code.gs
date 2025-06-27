@@ -3,13 +3,16 @@
  * Webアプリのバックエンド処理、スプレッドシートとのデータ連携などを担当します。
  * @author T.Maruyama
  * @since 2025-05-08
- * @version 1.1.9
+ * @version 1.2.0
  */
 
 /**
  * =================================================================================
  * 変更履歴
  * =================================================================================
+ *2025-06-27 T.Maruyama v1.2.0
+ *- [機能追加] メニュー選択時に当日は選択不可とするメニューを設定する機能を追加 
+ *
  * 2025-06-27 T.Maruyama v1.1.9
  * - [機能追加] 工場マスタから有効な工場のみを取得するフィルタを追加
  *
@@ -202,6 +205,35 @@ function getComment() {
   }
 }
 
+// メニュー制限マップ取得
+function getMenuRestrictionMap() {
+  try {
+    const sheet = getSpreadsheet(CONFIG.MASTER_ID).getSheetByName('M_MenuRestriction');
+    if (!sheet) return {};
+    const values = sheet.getDataRange().getValues();
+    const header = values[0];
+    const dateIdx = header.indexOf('MenuRestrictionDate');
+    const menuCDIdx = header.indexOf('MenuCD');
+    const venderCDIdx = header.indexOf('VenderCD');
+    const activeFlgIdx = header.indexOf('ActiveFlg');
+    const map = {};
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i];
+      if (row[activeFlgIdx] !== 1) continue;
+      const date = formatDate(row[dateIdx]);
+      const menuCD = row[menuCDIdx];
+      const venderCD = row[venderCDIdx];
+      if (!date || !menuCD || !venderCD) continue;
+      if (!map[date]) map[date] = {};
+      map[date][`${menuCD}_${venderCD}`] = true;
+    }
+    return map;
+  } catch (error) {
+    Logger.log('getMenuRestrictionMap error: ' + error.message + '\n' + error.stack);
+    return {};
+  }
+}
+
 // 指定週のメニューを取得
 function getMenuForWeek(empCD, startDate, endDate, isAdmin) {
   try {
@@ -219,6 +251,7 @@ function getMenuForWeek(empCD, startDate, endDate, isAdmin) {
     const venderSheet = spreadsheet.getSheetByName('M_Vender');
     const orderSheet = getSpreadsheet(CONFIG.ORDER_ID).getSheetByName(CONFIG.ORDER_SHEET);
     const holidayMap = getHolidayMap();
+    const restrictionMap = getMenuRestrictionMap(); // 追加
 
     if (!menuSheet || !venderSheet || !orderSheet) {
       Logger.log("必要なシートが見つかりません。");
@@ -272,6 +305,9 @@ function getMenuForWeek(empCD, startDate, endDate, isAdmin) {
       // メニュー詳細リスト生成
       const menuDetails = getMenuDetailsForDate(date, menuValues, venderMap, isAdmin);
 
+      // 選択不可メニューリスト
+      const restrictedMenus = restrictionMap[date] ? Object.keys(restrictionMap[date]) : [];
+
       return {
         Date: date,
         IsHoliday: isHoliday,
@@ -282,7 +318,8 @@ function getMenuForWeek(empCD, startDate, endDate, isAdmin) {
         VenderCD: orderedVenderCD,
         VenderName: orderedVenderName,
         FactoryCD: order ? order[3] : '',
-        Menus: menuDetails
+        Menus: menuDetails,
+        RestrictedMenus: restrictedMenus // 追加
       };
     });
 

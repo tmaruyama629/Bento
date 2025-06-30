@@ -1,0 +1,85 @@
+<!--
+@fileoverview メンテナンス中のページ
+@author T.Maruyama
+@since 2025-06-30
+@version 1.2.2
+
+=================================================================================
+ 変更履歴
+=================================================================================
+2025-05-08 T.Maruyama v1.2.2
+- 新規作成
+=================================================================================
+-->
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <title>メンテナンス中</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+      body { 
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; 
+        text-align: center; 
+        padding: 40px; 
+        background-color: #f8f9fa;
+        color: #495057;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+      }
+      .container {
+        max-width: 480px;
+        width: 95%;
+        background-color: #ffffff;
+        padding: 36px 24px 32px 24px;
+        border-radius: 14px;
+        box-shadow: 0 6px 24px rgba(0,0,0,0.10);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .icon {
+        font-size: 54px;
+        margin-bottom: 18px;
+        color: #26abb7;
+        animation: wrench 1.2s infinite linear alternate;
+      }
+      @keyframes wrench {
+        0% { transform: rotate(-18deg); }
+        100% { transform: rotate(18deg); }
+      }
+      h1 { 
+        color: #343a40;
+        font-size: 28px;
+        margin-bottom: 18px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+      p { 
+        color: #6c757d; 
+        font-size: 17px;
+        line-height: 1.7;
+        margin-bottom: 10px;
+      }
+      @media (max-width: 600px) {
+        .container {
+          padding: 18px 4vw 18px 4vw;
+        }
+        h1 { font-size: 22px; }
+        .icon { font-size: 38px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="icon" aria-label="メンテナンス中">🔧</div>
+      <h1>メンテナンス中です</h1>
+      <p>現在、システムのメンテナンス（データ整理中）のため、<br>フォームをご利用いただけません。</p>
+      <p>ご迷惑をおかけいたしますが、<br>しばらく時間をおいてから再度アクセスしてください。</p>
+    </div>
+  </body>
+</html>
+

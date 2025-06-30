@@ -3,15 +3,19 @@
  * Webアプリのバックエンド処理、スプレッドシートとのデータ連携などを担当します。
  * @author T.Maruyama
  * @since 2025-05-08
- * @version 1.2.0
+ * @version 1.2.2
  */
 
 /**
  * =================================================================================
  * 変更履歴
  * =================================================================================
+ *2025-06-30 T.Maruyama v1.2.2
+ * - [機能追加] アーカイブ処理中に表示するメンテナンス画面を実装
+ * - [機能追加] ライブラリ経由でメンテナンスモードを制御する関数を追加
+ *
  *2025-06-27 T.Maruyama v1.2.0
- *- [機能追加] メニュー選択時に当日は選択不可とするメニューを設定する機能を追加 
+ * - [機能追加] メニュー選択時に当日は選択不可とするメニューを設定する機能を追加 
  *
  * 2025-06-27 T.Maruyama v1.1.9
  * - [機能追加] 工場マスタから有効な工場のみを取得するフィルタを追加
@@ -50,12 +54,43 @@
 
 function doGet() {
   try {
-    const template = HtmlService.createTemplateFromFile('index');
-    // return template.evaluate().setTitle('お弁当注文フォーム');
-    return template.evaluate().setTitle('お弁当注文フォーム【開発系】');    
+    const properties = PropertiesService.getScriptProperties();
+    // 'isArchiving' というプロパティが 'true' に設定されているか確認
+    const isArchiving = properties.getProperty('isArchiving');
+
+    if (isArchiving === 'true') {
+      // メンテナンス中の場合は 'maintenance.html' を表示
+      return HtmlService.createTemplateFromFile('maintenance')
+          .evaluate()
+          .setTitle('メンテナンス中');
+    } else {
+      // 通常時は 'index.html' を表示
+      const template = HtmlService.createTemplateFromFile('index');
+      // return template.evaluate().setTitle('お弁当注文フォーム');
+      return template.evaluate().setTitle('お弁当注文フォーム【開発系】');
+    }
   } catch (error) {
     Logger.log('doGet error: ' + error.message + '\n' + error.stack);
-    throw new Error('システムエラーが発生しました。');
+    // エラー発生時にもユーザーに分かるようにエラーページを表示する方が親切
+    return HtmlService.createHtmlOutput('<h1>システムエラー</h1><p>現在、システムで問題が発生しています。しばらくしてから再度お試しください。</p>')
+        .setTitle('システムエラー');
+  }
+}
+
+/**
+ * ライブラリとして外部から呼び出されるためのメンテナンスモード設定関数。
+ * @param {boolean} isMaintenance - メンテナンスモードにする場合は true, 解除する場合は false を指定します。
+ */
+function setMaintenanceMode(isMaintenance) {
+  const properties = PropertiesService.getScriptProperties();
+  if (isMaintenance) {
+    // メンテナンスモードを有効化
+    properties.setProperty('isArchiving', 'true');
+    Logger.log('メンテナンスモードを有効にしました。');
+  } else {
+    // メンテナンスモードを解除
+    properties.deleteProperty('isArchiving');
+    Logger.log('メンテナンスモードを解除しました。');
   }
 }
 

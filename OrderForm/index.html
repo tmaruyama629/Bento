@@ -7,6 +7,9 @@
 =================================================================================
  変更履歴
 =================================================================================
+2025-06-30 T.Maruyama v1.2.1
+- [機能追加] お知らせ欄のコメントをHTMLを直接設定できるように変更
+
 2025-06-27 T.Maruyama v1.2.0
 - [機能追加] メニュー選択時に当日は選択不可とするメニューを設定する機能を追加
 
@@ -238,18 +241,12 @@
         comments.forEach(comment => {
           const block = document.createElement("div");
           block.className = "comment-block";
-          const para = document.createElement("p");
+          let html = comment.CommentText || '';
           if (comment.HyperLink) {
-            const link = document.createElement("a");
-            link.href = comment.HyperLink;
-            link.textContent = comment.CommentText;
-            link.target = "_blank";
-            link.style.color = "#007bff";
-            link.style.textDecoration = "underline";
-            para.appendChild(link);
-          } else {
-            para.textContent = comment.CommentText;
+            html = `<a href="${comment.HyperLink}" target="_blank">${html}</a>`;
           }
+          const para = document.createElement("p");
+          para.innerHTML = html;
           block.appendChild(para);
           container.appendChild(block);
         });
@@ -310,7 +307,7 @@
 
         google.script.run.withFailureHandler(onFailure).withSuccessHandler(function(result) {
           if (!result || result.status !== 'success') {
-            alert(result && result.message ? result.message : 'メニュー情報の取得に失敗しました。');
+            alert(result && result.message ? result.message : 'メニュー情報の取得に失敗し ました。');
             hideLoading();
             return;
           }
